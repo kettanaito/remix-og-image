@@ -1,0 +1,31 @@
+{
+  "type": "module",
+  "name": "vite-remix-og-image-plugin",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "og",
+    "image",
+    "open-graph",
+    "remix",
+    "generate"
+  ],
+  "author": "Artem Zakharchenko <me@kettanaito.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vite": "^5.4.1"
+  },
+  "dependencies": {
+    "@open-draft/deferred-promise": "^2.2.0",
+    "@remix-run/dev": "^2.11.2",
+    "@types/node": "^20",
+    "es-module-lexer": "^1.5.4",
+    "path-to-regexp": "^7.1.0",
+    "puppeteer": "^23.1.0"
+  }
+}
