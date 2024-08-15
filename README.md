@@ -40,14 +40,16 @@ import { openGraphImagePlugin } from 'vite-remix-og-image-plugin'
 export default defineConfig({
   plugins: [
     // ...the rest of your plugins.
-    openGraphImagePlugin(),
+    openGraphImagePlugin({
+      outputDirectory: './public/og',
+    }),
   ],
 })
 ```
 
 ### Step 3: Create OG route
 
-This library needs a special Remix route responsible for rendering OG images. Don't fret, it's your regular Remix route with _one_ tiny exception:
+This library needs a designated Remix route responsible for rendering OG images. Don't fret, it's your regular Remix route with _one_ tiny exception:
 
 ```jsx
 // app/routes/og.jsx
