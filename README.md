@@ -51,7 +51,7 @@ This library needs a special Remix route responsible for rendering OG images. Do
 
 ```jsx
 // app/routes/og.jsx
-import { isOgImageRequest } from 'vite-remix-og-image-plugin'
+import { isOpenGraphImageRequest } from 'vite-remix-og-image-plugin'
 
 // 1. Export the special `ogImages` function.
 // This function returns an array of OG image generation entries.
@@ -65,8 +65,8 @@ export function ogImages() {
 // 2a. Add the `loader` export.
 export function loader({ request }}) {
   // 2b. First, check if the incoming request is a meta request
-  // from the plugin. Use the `isOgImageRequest` utility from the library.
-  if (isOgImageRequest(request)) {
+  // from the plugin. Use the `isOpenGraphImageRequest` utility from the library.
+  if (isOpenGraphImageRequest(request)) {
     return ogImages()
   }
 
@@ -123,7 +123,7 @@ export function ogImages() {
 }
 
 export async function loader({ request, params }) {
-  if (isOgImageRequest(request)) {
+  if (isOpenGraphImageRequest(request)) {
     return ogImages()
   }
 
