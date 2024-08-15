@@ -78,7 +78,7 @@ export function loader({ request }}) {
 // 3. Create a React component for your OG image.
 // Use whichever other components, styles, utilities, etc.
 // your app already has. No limits!
-export default function OgImageTemplate() {
+export default function Template() {
   return (
     <div id="og-image">
       <h1>My site</h1>
@@ -133,7 +133,7 @@ export async function loader({ request, params }) {
   return { book }
 }
 
-export default function OgImageTemplate() {
+export default function Template() {
   const { book } = useLoaderData()
 
   return (
