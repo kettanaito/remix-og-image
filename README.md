@@ -87,7 +87,9 @@ export default function OgImageTemplate() {
 }
 ```
 
-> [!IMPORTANT] > **The `ogImages` export is special**. Everything else is your regular Remix route.
+<!-- prettier-ignore -->
+> [!IMPORTANT]
+> **The `ogImages` export is special**. Everything else is your regular Remix route.
 
 ## How does this work?
 
