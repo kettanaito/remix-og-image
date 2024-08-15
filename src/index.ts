@@ -22,7 +22,7 @@ interface RemixPluginContext {
   remixConfig: ResolvedRemixConfig
 }
 
-const EXPORT_NAME = 'ogImages'
+const EXPORT_NAME = 'openGraphImages'
 
 export interface OgImageData {
   name: string
@@ -52,7 +52,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
     )
   }
 
-  async function generateOgImages(route: ConfigRoute) {
+  async function generateOpenGraphImages(route: ConfigRoute) {
     if (!route.path) {
       return
     }
@@ -170,7 +170,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
         return
       }
 
-      generateOgImages(route)
+      generateOpenGraphImages(route)
     },
     async buildEnd() {
       /**
