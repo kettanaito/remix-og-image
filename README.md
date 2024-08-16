@@ -1,4 +1,4 @@
-# `vite-remix-og-image-plugin`
+# `remix-og-image`
 
 Build-time in-browser Open Graph image generation plugin for Remix (well, technically, Vite).
 
@@ -28,14 +28,14 @@ Here's a longer version of that:
 ### Step 1: Install
 
 ```sh
-npm i vite-remix-og-image-plugin
+npm i remix-og-image
 ```
 
 ### Step 2: Add plugin
 
 ```js
 // vite.config.js
-import { openGraphImagePlugin } from 'vite-remix-og-image-plugin'
+import { openGraphImagePlugin } from 'remix-og-image/plugin'
 
 export default defineConfig({
   plugins: [
@@ -55,7 +55,7 @@ This library needs a designated Remix route responsible for rendering OG images.
 ```jsx
 // app/routes/og.jsx
 import { json } from '@remix-run/react'
-import { isOpenGraphImageRequest } from 'vite-remix-og-image-plugin'
+import { isOpenGraphImageRequest } from 'remix-og-image'
 
 // 1. Export the special `openGraphImage` function.
 // This function returns an array of OG image generation entries.
