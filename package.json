@@ -21,8 +21,10 @@
   ],
   "scripts": {
     "dev": "tsc -w",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc"
+    "test": "exit 0",
+    "build": "tsc",
+    "release": "release publish",
+    "prepack": "pnpm build"
   },
   "keywords": [
     "og",
@@ -61,6 +63,7 @@
     }
   },
   "devDependencies": {
+    "@ossjs/release": "^0.8.1",
     "typescript": "^5.5.4",
     "vite": "^5.4.1"
   }
