@@ -9,6 +9,16 @@ import { compile } from 'path-to-regexp'
 import { launch } from 'puppeteer'
 
 interface Options {
+  /**
+   * Selector for the element to capture as the Open Graph image.
+   * @example "#og-image"
+   */
+  elementSelector: string
+
+  /**
+   * Directory to output the generated images.
+   * This is likely somewhere in your `public` directory.
+   */
   outputDirectory: string
 
   /**
@@ -24,7 +34,7 @@ interface RemixPluginContext {
 
 const EXPORT_NAME = 'openGraphImage'
 
-export interface OgImageData {
+export interface OpenGraphImageData {
   name: string
   params: Record<string, string>
 }
@@ -69,7 +79,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
       headers: {
         agent: 'vite-plugin-og-image',
       },
-    }).then<Array<OgImageData>>((response) => response.json())
+    }).then<Array<OpenGraphImageData>>((response) => response.json())
 
     for (const data of allData) {
       const browser = await browserPromise
@@ -81,9 +91,11 @@ export function openGraphImagePlugin(options: Options): Plugin {
         height: 630,
       })
 
-      const ogImageBoundingBox = await page.$('#og-image').then((element) => {
-        return element?.boundingBox()
-      })
+      const ogImageBoundingBox = await page
+        .$(options.elementSelector)
+        .then((element) => {
+          return element?.boundingBox()
+        })
 
       if (!ogImageBoundingBox) {
         return

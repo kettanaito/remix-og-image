@@ -41,6 +41,7 @@ export default defineConfig({
   plugins: [
     // ...the rest of your plugins.
     openGraphImagePlugin({
+      elementSelector: '#og-image',
       outputDirectory: './public/og',
     }),
   ],
@@ -93,6 +94,20 @@ export default function Template() {
 > [!IMPORTANT]
 > **The `openGraphImage` export is special**. Everything else is your regular Remix route.
 
+You can then reference the generated OG images in the `meta` export of your page:
+
+```jsx
+// app/routes/page.jsx
+export function meta() {
+  return [
+    {
+      name: 'og:image',
+      content: '/og/og-image.jpeg',
+    },
+  ]
+}
+```
+
 ## How does this work?
 
 1. The plugin spawns a single Chromium instance.
@@ -139,7 +154,10 @@ export default function Template() {
   const { book } = useLoaderData()
 
   return (
-    <div className="w-[1200px] h-[630px] bg-blue-100 flex items-center justify-center">
+    <div
+      id="og-image"
+      className="w-[1200px] h-[630px] bg-blue-100 flex items-center justify-center"
+    >
       <h1 className="text-4xl">{book.title}</h1>
     </div>
   )
