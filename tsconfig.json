@@ -2,13 +2,14 @@
   "include": ["src"],
   "exclude": ["node_modules"],
   "compilerOptions": {
+    "outDir": "./build",
+    "declaration": true,
+    "declarationDir": "./build",
     "strict": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "outDir": "./build",
-    "declaration": true,
-    "declarationDir": "./build"
+    "target": "es2022",
+    "module": "es2022",
+    "moduleResolution": "bundler"
   }
 }
