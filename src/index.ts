@@ -22,7 +22,7 @@ interface RemixPluginContext {
   remixConfig: ResolvedRemixConfig
 }
 
-const EXPORT_NAME = 'openGraphImages'
+const EXPORT_NAME = 'openGraphImage'
 
 export interface OgImageData {
   name: string

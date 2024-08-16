@@ -55,10 +55,10 @@ This library needs a designated Remix route responsible for rendering OG images.
 // app/routes/og.jsx
 import { isOpenGraphImageRequest } from 'vite-remix-og-image-plugin'
 
-// 1. Export the special `openGraphImages` function.
+// 1. Export the special `openGraphImage` function.
 // This function returns an array of OG image generation entries.
 // In the example below, it generates only one image called "og-image.jpeg"
-export function openGraphImages() {
+export function openGraphImage() {
   return [
     { name: 'og-image' }
   ]
@@ -69,7 +69,7 @@ export function loader({ request }}) {
   // 2b. First, check if the incoming request is a meta request
   // from the plugin. Use the `isOpenGraphImageRequest` utility from the library.
   if (isOpenGraphImageRequest(request)) {
-    return openGraphImages()
+    return openGraphImage()
   }
 
   // Compute and return any data needed for the OG image.
@@ -91,14 +91,14 @@ export default function Template() {
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> **The `openGraphImages` export is special**. Everything else is your regular Remix route.
+> **The `openGraphImage` export is special**. Everything else is your regular Remix route.
 
 ## How does this work?
 
 1. The plugin spawns a single Chromium instance.
-1. The plugin finds any routes with the `openGraphImages()` export.
-1. The plugin requests the route as a data route (a special request) to get whatever you returned from the `openGraphImages()` function. In response, the plugin receives the list of OG images (and their data) to generate.
-1. The plugin iterates over each OG image entry, visiting the route in the browser, providing it whatever `params` you provided in the `openGraphImages()` function. This way, it support dynamic OG images!
+1. The plugin finds any routes with the `openGraphImage()` export.
+1. The plugin requests the route as a data route (a special request) to get whatever you returned from the `openGraphImage()` function. In response, the plugin receives the list of OG images (and their data) to generate.
+1. The plugin iterates over each OG image entry, visiting the route in the browser, providing it whatever `params` you provided in the `openGraphImage()` function. This way, it support dynamic OG images!
 1. Finally, the plugin takes a screenshot of the OG image element on the page, and writes it as an image to disk. 🎉
 
 ## Recipes
@@ -107,11 +107,11 @@ export default function Template() {
 
 One of the selling points of generating OG images is including _dynamic data_ in them.
 
-This plugin supports generating multiple OG images from a single route by returning an array of data alternations from the `openGraphImages` function:
+This plugin supports generating multiple OG images from a single route by returning an array of data alternations from the `openGraphImage` function:
 
 ```jsx
-// app/routes/post.$slug.jsx
-export function openGraphImages() {
+// app/routes/post.$slug.og.jsx
+export function openGraphImage() {
   // Return a dynamic number of OG image entries
   // based on your data. The plugin will automatically
   // provide the "params" to this route when
@@ -126,7 +126,7 @@ export function openGraphImages() {
 
 export async function loader({ request, params }) {
   if (isOpenGraphImageRequest(request)) {
-    return openGraphImages()
+    return openGraphImage()
   }
 
   const { slug } = params
