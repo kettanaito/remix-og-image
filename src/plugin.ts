@@ -162,11 +162,11 @@ export function openGraphImagePlugin(options: Options): Plugin {
       })
     },
     async transform(code, id, options = {}) {
-      if (options.ssr) {
+      const remixContext = await remixContextPromise
+
+      if (!remixContext) {
         return
       }
-
-      const remixContext = await remixContextPromise
 
       const routePath = normalizePath(
         path.relative(remixContext.remixConfig.appDirectory, id)
@@ -193,11 +193,19 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
       this.debug(`found og image route: ${route.id}`)
 
-      generateOpenGraphImages(route).then(() => {
-        this.info(`generated og image for route: ${route.id}`)
-      })
+      if (options.ssr) {
+        generateOpenGraphImages(route).then(() => {
+          this.info(`generated og image for route: ${route.id}`)
+        })
 
-      routesWithImages.push(route)
+        routesWithImages.push(route)
+      } else {
+        /**
+         * @todo Parse the route module and remove the special export altogether.
+         * This way, it won't be present in the client bundle, and won't affect
+         * "vite-plugin-react" and its HMR.
+         */
+      }
     },
     async buildEnd() {
       // Generate the images on build end, when all the assets are ready.
