@@ -95,6 +95,15 @@ export function openGraphImagePlugin(options: Options): Plugin {
         const pageUrl = new URL(createRoutePath(data.params), serverUrl).href
         await page.goto(pageUrl, { waitUntil: 'networkidle0' })
 
+        // Set viewport to a 5K device equivalent.
+        // This is more than enough to ensure that the OG image is visible.
+        await page.setViewport({
+          width: 5120,
+          height: 2880,
+          // Use a larger scale factor to get a crisp image.
+          deviceScaleFactor: 2,
+        })
+
         const ogImageBoundingBox = await page
           .$(options.elementSelector)
           .then((element) => {
@@ -105,12 +114,12 @@ export function openGraphImagePlugin(options: Options): Plugin {
           return
         }
 
-        await page.setViewport({
-          width: ogImageBoundingBox.width,
-          height: ogImageBoundingBox.height,
-          // Use a larger scale factor to get a crisp image.
-          deviceScaleFactor: 2,
-        })
+        await page.evaluate((selector) => {
+          const element = document.querySelector(selector)
+          if (element) {
+            element.scrollIntoView(true)
+          }
+        }, options.elementSelector)
 
         const screenshot = await page.screenshot({
           type: format,
@@ -137,7 +146,6 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
   return {
     name: 'vite-remix-og-image-plugin',
-    enforce: 'post',
     config(config) {
       remixContextPromise.resolve(Reflect.get(config, '__remixPluginContext'))
     },
