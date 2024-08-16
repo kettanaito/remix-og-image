@@ -1,11 +1,14 @@
 {
-  "include": ["src/**/*"],
+  "include": ["src"],
   "exclude": ["node_modules"],
   "compilerOptions": {
     "strict": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "module": "NodeNext",
-    "moduleResolution": "NodeNext"
+    "moduleResolution": "NodeNext",
+    "outDir": "./build",
+    "declaration": true,
+    "declarationDir": "./build"
   }
 }

@@ -163,3 +163,5 @@ export default function Template() {
   )
 }
 ```
+
+Use whichever dynamic data for the `name` to access ...
