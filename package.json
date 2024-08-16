@@ -7,12 +7,12 @@
   "typings": "./build/index.d.ts",
   "exports": {
     ".": {
-      "types": "./build/index.d.ts",
-      "default": "./build/index.js"
+      "import": "./build/index.js",
+      "require": "./build/index.cjs"
     },
     "./plugin": {
-      "types": "./build/plugin.d.ts",
-      "default": "./build/plugin.js"
+      "import": "./build/plugin.js",
+      "require": "./build/plugin.cjs"
     }
   },
   "files": [
@@ -20,9 +20,9 @@
     "./src"
   ],
   "scripts": {
-    "dev": "tsc -w",
+    "dev": "tsup --watch",
     "test": "exit 0",
-    "build": "tsc",
+    "build": "tsup",
     "release": "release publish",
     "prepack": "pnpm build"
   },
@@ -39,9 +39,18 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "@babel/core": "^7.25.2",
+    "@babel/generator": "^7.25.0",
+    "@babel/parser": "^7.25.3",
+    "@babel/traverse": "^7.25.3",
+    "@babel/types": "^7.25.2",
     "@open-draft/deferred-promise": "^2.2.0",
     "@remix-run/dev": "^2.11.2",
+    "@types/babel__core": "^7.20.5",
+    "@types/babel__generator": "^7.6.8",
+    "@types/babel__traverse": "^7.20.6",
     "@types/node": "^20",
+    "babel-dead-code-elimination": "^1.0.6",
     "es-module-lexer": "^1.5.4",
     "path-to-regexp": "^7.1.0",
     "puppeteer": "^23.1.0"
@@ -64,6 +73,7 @@
   },
   "devDependencies": {
     "@ossjs/release": "^0.8.1",
+    "tsup": "^8.2.4",
     "typescript": "^5.5.4",
     "vite": "^5.4.1"
   }

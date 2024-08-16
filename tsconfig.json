@@ -6,10 +6,13 @@
     "declaration": true,
     "declarationDir": "./build",
     "strict": true,
-    "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "target": "es2022",
-    "module": "es2022",
-    "moduleResolution": "bundler"
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true
   }
 }

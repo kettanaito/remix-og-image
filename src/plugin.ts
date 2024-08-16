@@ -5,8 +5,13 @@ import { parse as esModuleLexer } from 'es-module-lexer'
 import type { ResolvedRemixConfig } from '@remix-run/dev'
 import type { ConfigRoute } from '@remix-run/dev/dist/config/routes.js'
 import { DeferredPromise } from '@open-draft/deferred-promise'
+import {
+  deadCodeElimination,
+  findReferencedIdentifiers,
+} from 'babel-dead-code-elimination'
 import { compile } from 'path-to-regexp'
 import { launch } from 'puppeteer'
+import { parse, traverse, generate, t } from './babel.js'
 import {
   OPEN_GRAPH_USER_AGENT_HEADER,
   type OpenGraphImageData,
@@ -182,10 +187,10 @@ export function openGraphImagePlugin(options: Options): Plugin {
         return
       }
 
-      const exports = esModuleLexer(code)[1]
+      const [, routeExports] = esModuleLexer(code)
 
       // Ignore routes that don't have the root-level special export.
-      const ogImageExport = exports.find((e) => e.n === EXPORT_NAME)
+      const ogImageExport = routeExports.find((e) => e.n === EXPORT_NAME)
 
       if (!ogImageExport) {
         return
@@ -193,19 +198,40 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
       this.debug(`found og image route: ${route.id}`)
 
-      if (options.ssr) {
-        generateOpenGraphImages(route).then(() => {
-          this.info(`generated og image for route: ${route.id}`)
-        })
-
-        routesWithImages.push(route)
-      } else {
+      // OG image generation must only happen server-side.
+      if (!options.ssr) {
         /**
-         * @todo Parse the route module and remove the special export altogether.
+         * @note Parse the route module and remove the special export altogether.
          * This way, it won't be present in the client bundle, and won't affect
          * "vite-plugin-react" and its HMR.
          */
+        const ast = parse(code, { sourceType: 'module' })
+        const refs = findReferencedIdentifiers(ast)
+
+        traverse(ast, {
+          Identifier(path) {
+            if (
+              t.isIdentifier(path.node) &&
+              path.node.name === EXPORT_NAME &&
+              (t.isFunctionDeclaration(path.parent) ||
+                (t.isVariableDeclarator(path.parent) &&
+                  t.isArrowFunctionExpression(path.parent.init)))
+            ) {
+              path.replaceWith(t.identifier('undefined'))
+            }
+          },
+        })
+
+        // Use DCE to remove any references the special export might have had.
+        deadCodeElimination(ast, refs)
+        return generate(ast, { sourceMaps: true, sourceFileName: id }, code)
       }
+
+      generateOpenGraphImages(route).then(() => {
+        this.info(`generated og image for route: ${route.id}`)
+      })
+
+      routesWithImages.push(route)
     },
     async buildEnd() {
       // Generate the images on build end, when all the assets are ready.
