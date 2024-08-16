@@ -81,46 +81,52 @@ export function openGraphImagePlugin(options: Options): Plugin {
      * - OG route returning invalid data;
      */
 
-    for (const data of allData) {
-      const browser = await browserPromise
-      const page = await browser.newPage()
-      const pageUrl = new URL(createRoutePath(data.params), serverUrl).href
-      await page.goto(pageUrl, { waitUntil: 'networkidle0' })
+    const browser = await browserPromise
 
-      const ogImageBoundingBox = await page
-        .$(options.elementSelector)
-        .then((element) => {
-          return element?.boundingBox()
+    for (const data of allData) {
+      const page = await browser.newPage()
+
+      try {
+        const pageUrl = new URL(createRoutePath(data.params), serverUrl).href
+        await page.goto(pageUrl, { waitUntil: 'networkidle0' })
+
+        const ogImageBoundingBox = await page
+          .$(options.elementSelector)
+          .then((element) => {
+            return element?.boundingBox()
+          })
+
+        if (!ogImageBoundingBox) {
+          return
+        }
+
+        await page.setViewport({
+          width: ogImageBoundingBox.width,
+          height: ogImageBoundingBox.height,
+          // Use a larger scale factor to get a crisp image.
+          deviceScaleFactor: 2,
         })
 
-      if (!ogImageBoundingBox) {
-        return
+        const screenshot = await page.screenshot({
+          type: format,
+          quality: 100,
+          encoding: 'binary',
+          clip: ogImageBoundingBox,
+        })
+
+        const outputDirectory = await getOutputDirectory()
+
+        if (!fs.existsSync(outputDirectory)) {
+          await fs.promises.mkdir(outputDirectory, { recursive: true })
+        }
+
+        await fs.promises.writeFile(
+          path.resolve(outputDirectory, `${data.name}.jpg`),
+          screenshot
+        )
+      } finally {
+        await page.close({ runBeforeUnload: false })
       }
-
-      await page.setViewport({
-        width: ogImageBoundingBox.width,
-        height: ogImageBoundingBox.height,
-        // Use a larger scale factor to get a crisp image.
-        deviceScaleFactor: 2,
-      })
-
-      const screenshot = await page.screenshot({
-        type: format,
-        quality: 100,
-        encoding: 'binary',
-        clip: ogImageBoundingBox,
-      })
-
-      const outputDirectory = await getOutputDirectory()
-
-      if (!fs.existsSync(outputDirectory)) {
-        await fs.promises.mkdir(outputDirectory, { recursive: true })
-      }
-
-      await fs.promises.writeFile(
-        path.resolve(outputDirectory, `${data.name}.jpg`),
-        screenshot
-      )
     }
   }
 
