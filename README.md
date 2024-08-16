@@ -62,6 +62,8 @@ import { isOpenGraphImageRequest } from 'remix-og-image'
 // In the example below, it generates only one image called "og-image.jpeg"
 export function openGraphImage() {
   return [
+    // The `name` property controls the generated
+    // image's file name.
     { name: 'og-image' }
   ]
 }
@@ -175,4 +177,22 @@ export default function Template() {
 }
 ```
 
-Use whichever dynamic data for the `name` to access ...
+Use the same dynamic data you provided as `name` in the `openGraphImage` function to access the generated OG images in your route:
+
+```jsx
+// app/routes/post.$slug.jsx
+
+export function meta({ params }) {
+  const { slug } = params
+
+  // ...validate the params.
+
+  return [
+    {
+      name: 'og:image',
+      content: `/og/${slug}.jpeg`,
+      //            👆👆👆👆
+    },
+  ]
+}
+```
