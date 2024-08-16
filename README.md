@@ -110,6 +110,10 @@ export function meta() {
     {
       name: 'og:image',
       content: '/og/og-image.jpeg',
+      //            👆👆👆👆👆
+      // This is the value of the `name` property
+      // you provided in the `openGraphImage` export
+      // of your OG image route.
     },
   ]
 }
