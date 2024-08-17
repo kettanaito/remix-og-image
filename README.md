@@ -1,6 +1,6 @@
 # `remix-og-image`
 
-Build-time in-browser Open Graph image generation plugin for Remix (well, technically, Vite).
+Build-time in-browser Open Graph image generation plugin for Remix.
 
 ## Motivation
 
@@ -21,7 +21,7 @@ Here's a longer version of that:
 - 🚀 **No limitations**. I mean it. Use the same styles, fonts, assets, components, utilities, and anything else you already use.
 - 💎 **Pixel-perfect rendering**. This plugin takes a screenshot of your special OG image route in the actual browser, giving you 1-1 browser rendering without compromise.
 - 👁️ **Retina-ready**. All images are generated with x2 device scale factor, then compressed and optimized to deliver the best quality/file size ratio.
-- 🛠️ **Build-time**. You want build-time OG image generation most of the time. This plugin does just that. Get the images on the disk, pay no runtime cost whatsoever. Both static and dynamic images are supported!
+- 🛠️ **Build-time**. You want build-time OG image generation most of the time. This plugin does just that. Get the images on the disk, pay no runtime cost whatsoever. Both static and dynamic routes are supported!
 - 💅 **Interactive**. OG image is just a React component rendered in a route in your app. Visit that route to iterate your image and bring it to perfection. No extra steps to preview/debug it. It's literally a React component without magic.
 
 ## Usage
@@ -42,7 +42,11 @@ export default defineConfig({
   plugins: [
     // ...the rest of your plugins.
     openGraphImagePlugin({
+      // Specify a selector for the DOM element on the page
+      // that the plugin should screenshot.
       elementSelector: '#og-image',
+
+      // Specify where to save the generated images.
       outputDirectory: './public/og',
     }),
   ],
@@ -58,7 +62,7 @@ This library needs a designated Remix route responsible for rendering OG images.
 import { json } from '@remix-run/react'
 import { isOpenGraphImageRequest } from 'remix-og-image'
 
-// 1. Export the special `openGraphImage` function.
+// 👉 1. Export the special `openGraphImage` function.
 // This function returns an array of OG image generation entries.
 // In the example below, it generates only one image called "og-image.jpeg"
 export function openGraphImage() {
@@ -71,7 +75,7 @@ export function openGraphImage() {
 
 // 2a. Add the `loader` export.
 export function loader({ request }}) {
-  // 2b. First, check if the incoming request is a meta request
+  // 👉 2b. First, check if the incoming request is a meta request
   // from the plugin. Use the `isOpenGraphImageRequest` utility from the library.
   if (isOpenGraphImageRequest(request)) {
     /**
@@ -88,7 +92,7 @@ export function loader({ request }}) {
   return null
 }
 
-// 3. Create a React component for your OG image.
+// 👉 3. Create a React component for your OG image.
 // Use whichever other components, styles, utilities, etc.
 // your app already has. No limits!
 export default function Template() {
