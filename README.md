@@ -197,3 +197,21 @@ export function meta({ params }) {
   ]
 }
 ```
+
+## Frequently Asked Questions
+
+### How to set the image size?
+
+This plugin treats your OG image React component as the source of truth. The dimensions of your OG image will be the same as the dimensions of the DOM element representing it.
+
+```jsx
+export default function Template() {
+  return (
+    <div id="og-image" style={{ width: 1200, height: 630 }}>
+      Hello world!
+    </div>
+  )
+}
+```
+
+> For example, this `Template` component renders the `#og-image` element as a `1200x630` block. That will be the size of the generated OG image.
