@@ -102,56 +102,54 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
     const files: Array<GeneratedOpenGraphImage> = []
 
-    for (const data of allData) {
-      const page = await browser.newPage()
+    await Promise.all(
+      allData.map(async (data) => {
+        const page = await browser.newPage()
 
-      try {
-        const pageUrl = new URL(createRoutePath(data.params), serverUrl).href
-        await page.goto(pageUrl, { waitUntil: 'networkidle0' })
+        try {
+          const pageUrl = new URL(createRoutePath(data.params), serverUrl).href
+          await page.goto(pageUrl, { waitUntil: 'networkidle0' })
 
-        // Set viewport to a 5K device equivalent.
-        // This is more than enough to ensure that the OG image is visible.
-        await page.setViewport({
-          width: 5120,
-          height: 2880,
-          // Use a larger scale factor to get a crisp image.
-          deviceScaleFactor: 2,
-        })
+          // Set viewport to a 5K device equivalent.
+          // This is more than enough to ensure that the OG image is visible.
+          await page.setViewport({
+            width: 5120,
+            height: 2880,
+            // Use a larger scale factor to get a crisp image.
+            deviceScaleFactor: 2,
+          })
 
-        const ogImageBoundingBox = await page
-          .$(options.elementSelector)
-          .then((element) => element?.boundingBox())
+          const ogImageBoundingBox = await page
+            .$(options.elementSelector)
+            .then((element) => element?.boundingBox())
 
-        if (!ogImageBoundingBox) {
-          return []
-        }
-
-        await page.evaluate((selector) => {
-          const element = document.querySelector(selector)
-          if (element) {
-            element.scrollIntoView(true)
+          if (!ogImageBoundingBox) {
+            return []
           }
-        }, options.elementSelector)
 
-        const imageBuffer = await page.screenshot({
-          type: format,
-          quality: 100,
-          encoding: 'binary',
-          clip: ogImageBoundingBox,
-        })
+          await page.evaluate((selector) => {
+            const element = document.querySelector(selector)
+            if (element) {
+              element.scrollIntoView(true)
+            }
+          }, options.elementSelector)
 
-        files.push({
-          name: `${data.name}.${format}`,
-          content: imageBuffer,
-        })
-      } finally {
-        /**
-         * @fixme The entire page screenshot logic can be encapsulated in a Promise
-         * and pushed into some array, then awaited throughout all the routes.
-         */
-        await page.close({ runBeforeUnload: false })
-      }
-    }
+          const imageBuffer = await page.screenshot({
+            type: format,
+            quality: 100,
+            encoding: 'binary',
+            clip: ogImageBoundingBox,
+          })
+
+          files.push({
+            name: `${data.name}.${format}`,
+            content: imageBuffer,
+          })
+        } finally {
+          await page.close({ runBeforeUnload: false })
+        }
+      })
+    )
 
     return files
   }
