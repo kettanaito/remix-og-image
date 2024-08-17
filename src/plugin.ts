@@ -353,11 +353,6 @@ export function openGraphImagePlugin(options: Options): Plugin {
           )
 
           await Promise.allSettled(pendingScreenshots)
-
-          /**
-           * @todo Print out any errored image generation promises.
-           */
-
           await Promise.all([server.close(), browser.close()])
         }
       },
