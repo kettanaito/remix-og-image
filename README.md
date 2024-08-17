@@ -122,14 +122,6 @@ export function meta() {
 }
 ```
 
-## How does this work?
-
-1. The plugin spawns a single Chromium instance.
-1. The plugin finds any routes with the `openGraphImage()` export.
-1. The plugin requests the route as a data route (a special request) to get whatever you returned from the `openGraphImage()` function. In response, the plugin receives the list of OG images (and their data) to generate.
-1. The plugin iterates over each OG image entry, visiting the route in the browser, providing it whatever `params` you provided in the `openGraphImage()` function. This way, it support dynamic OG images!
-1. Finally, the plugin takes a screenshot of the OG image element on the page, and writes it as an image to disk. 🎉
-
 ## Recipes
 
 ### Dynamic data
@@ -199,6 +191,14 @@ export function meta({ params }) {
 ```
 
 ## Frequently Asked Questions
+
+### How does this plugin work?
+
+1. The plugin spawns a single Chromium instance.
+1. The plugin finds any routes with the `openGraphImage()` export.
+1. The plugin requests the route as a data route (a special request) to get whatever you returned from the `openGraphImage()` function. In response, the plugin receives the list of OG images (and their data) to generate.
+1. The plugin iterates over each OG image entry, visiting the route in the browser, providing it whatever `params` you provided in the `openGraphImage()` function. This way, it support dynamic OG images!
+1. Finally, the plugin takes a screenshot of the OG image element on the page, and writes it as an image to disk. 🎉
 
 ### How to set the image size?
 
