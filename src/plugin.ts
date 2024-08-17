@@ -62,7 +62,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
   const viteConfigPromise = new DeferredPromise<ResolvedConfig>()
   const remixContextPromise = new DeferredPromise<RemixPluginContext>()
   const serverUrlPromise = new DeferredPromise<URL>()
-  const routesWithImages = new Array<ConfigRoute>()
+  const routesWithImages = new Set<ConfigRoute>()
 
   async function getOutputDirectory() {
     const viteConfig = await viteConfigPromise
@@ -177,6 +177,12 @@ export function openGraphImagePlugin(options: Options): Plugin {
     },
 
     async configureServer(server) {
+      const viteConfig = await viteConfigPromise
+
+      if (viteConfig.command === 'build') {
+        return
+      }
+
       const { httpServer } = server
 
       if (!httpServer) {
@@ -203,6 +209,9 @@ export function openGraphImagePlugin(options: Options): Plugin {
     async transform(code, id, options = {}) {
       const viteConfig = await viteConfigPromise
 
+      /**
+       * @fixme This is hackery.
+       */
       if (viteConfig.preview.headers?.['x-foo']) {
         return
       }
@@ -278,7 +287,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
       } else {
         // In build mode, collect all the OG image routes to be
         // visited on build end, when the application build is done.
-        routesWithImages.push(route)
+        routesWithImages.add(route)
       }
     },
 
@@ -301,24 +310,32 @@ export function openGraphImagePlugin(options: Options): Plugin {
            */
           viteConfig.build.rollupOptions.input ===
             'virtual:remix/server-build' &&
-          routesWithImages.length > 0
+          routesWithImages.size > 0
         ) {
           console.log(
             'Generating OG images for %d route(s)...',
-            routesWithImages.length
+            routesWithImages.size
           )
 
           const [browser, server] = await Promise.all([
             getBrowserInstance(),
+
+            /**
+             * @fixme Vite preview server someties throws:
+             * "Error: The server is being restarted or closed. Request is outdated."
+             * when trying to navigate to it. It requires a refresh to work.
+             */
             runVitePreviewServer(viteConfig),
           ])
           const serverUrl = new URL(server.resolvedUrls?.local?.[0]!)
 
-          const pendingScreenshots = routesWithImages.map((route) => {
-            return generateOpenGraphImages(route, browser, serverUrl).then(
-              (images) => Promise.all(images.map(writeImageToDisk))
-            )
-          })
+          const pendingScreenshots = Array.from(routesWithImages).map(
+            (route) => {
+              return generateOpenGraphImages(route, browser, serverUrl).then(
+                (images) => Promise.all(images.map(writeImageToDisk))
+              )
+            }
+          )
 
           await Promise.allSettled(pendingScreenshots)
 
