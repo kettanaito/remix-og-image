@@ -135,6 +135,19 @@ export function meta() {
   - `outputDirectory`, `string`, a path to the directory to write the image.
   - `format`, `"jpeg" | "png" | "webp"` (_optional_; default, `"jpeg"`), the format of the generated image.
 
+```js
+import { openGraphImagePlugin } from 'remix-og-image/plugin'
+```
+
+### `isOpenGraphImageRequest(request)`
+
+- `request`, [`Request`](https://developer.mozilla.org/en-US/docs/Web/API/Request), a request reference from the `loader` function of your OG image route.
+- Returns `boolean` indicating whether the given `request` is the meta request performed by the plugin during the data scrapping for the `openGraphImage()` special export.
+
+```js
+import { isOpenGraphImageRequest } from 'remix-og-image'
+```
+
 ## Recipes
 
 ### Dynamic data
