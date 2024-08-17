@@ -139,6 +139,9 @@ export function openGraphImagePlugin(options: Options): Plugin {
             type: format,
             quality: 100,
             encoding: 'binary',
+            // Set an explicit `clip` boundary for the screenshot
+            // to capture only the image and ignore any otherwise
+            // present UI, like the layout.
             clip: ogImageBoundingBox,
           })
 
