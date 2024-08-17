@@ -9,6 +9,7 @@ import {
   normalizePath,
 } from 'vite'
 import { parse as esModuleLexer } from 'es-module-lexer'
+import sharp from 'sharp'
 import type { ResolvedRemixConfig } from '@remix-run/dev'
 import type { ConfigRoute } from '@remix-run/dev/dist/config/routes.js'
 import { DeferredPromise } from '@open-draft/deferred-promise'
@@ -141,9 +142,21 @@ export function openGraphImagePlugin(options: Options): Plugin {
             clip: ogImageBoundingBox,
           })
 
+          const optimizedImageBuffer = await sharp(imageBuffer)
+            .resize({
+              // Resize the image to the original DOM element's size.
+              // This compensates for the device scale factor.
+              width: ogImageBoundingBox.width,
+            })
+            .png({
+              compressionLevel: 9,
+              adaptiveFiltering: true,
+            })
+            .toBuffer()
+
           files.push({
             name: `${data.name}.${format}`,
-            content: imageBuffer,
+            content: optimizedImageBuffer,
           })
         } finally {
           await page.close({ runBeforeUnload: false })
