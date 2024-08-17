@@ -20,6 +20,7 @@ Here's a longer version of that:
 
 - 🚀 **No limitations**. I mean it. Use the same styles, fonts, assets, components, utilities, and anything else you already use.
 - 💎 **Pixel-perfect rendering**. This plugin takes a screenshot of your special OG image route in the actual browser, giving you 1-1 browser rendering without compromise.
+- 👁️ **Retina-ready**. All images are generated with x2 device scale factor, then compressed and optimized to deliver the best quality/file size ratio.
 - 🛠️ **Build-time**. You want build-time OG image generation most of the time. This plugin does just that. Get the images on the disk, pay no runtime cost whatsoever. Both static and dynamic images are supported!
 - 💅 **Interactive**. OG image is just a React component rendered in a route in your app. Visit that route to iterate your image and bring it to perfection. No extra steps to preview/debug it. It's literally a React component without magic.
 
