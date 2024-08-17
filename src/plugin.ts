@@ -219,14 +219,6 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
     async transform(code, id, options = {}) {
       const viteConfig = await viteConfigPromise
-
-      /**
-       * @fixme This is hackery.
-       */
-      if (viteConfig.preview.headers?.['x-foo']) {
-        return
-      }
-
       const remixContext = await remixContextPromise
 
       if (!remixContext) {
@@ -394,15 +386,6 @@ async function runVitePreviewServer(
        * "Using vars defined in XYZ" when run. Is there a way to turn that off?
        */
       logLevel: 'error',
-      preview: {
-        /**
-         * @fixme This is a weird way of making sure this plugin
-         * doesn't run in the preview mode spawned during the build.
-         * Would be nice if Vite respected custom `plugins` but it doesn't.
-         * It will ALAWAYS take `plugins` from your app's config.
-         */
-        headers: { 'x-foo': '1' },
-      },
     },
     'serve',
     /**
