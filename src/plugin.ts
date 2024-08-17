@@ -329,9 +329,13 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
           const pendingScreenshots = Array.from(routesWithImages).map(
             (route) => {
-              return generateOpenGraphImages(route, browser, serverUrl).then(
-                (images) => Promise.all(images.map(writeImageToDisk))
-              )
+              return generateOpenGraphImages(route, browser, serverUrl)
+                .then((images) => Promise.all(images.map(writeImageToDisk)))
+                .catch((error) => {
+                  this.error(
+                    `Failed to generate OG image for route "${route.id}": ${error}`
+                  )
+                })
             }
           )
 
