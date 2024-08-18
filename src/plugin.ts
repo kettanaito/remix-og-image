@@ -50,28 +50,40 @@ interface RemixPluginContext {
 }
 
 interface GeneratedOpenGraphImage {
-  name: string
+  path: string
   content: Uint8Array
+}
+
+interface CacheEntry {
+  routeLastModifiedAt: number
+  imagePaths: Array<string>
 }
 
 const PLUGIN_NAME = 'remix-og-image-plugin'
 const EXPORT_NAME = 'openGraphImage'
+const CACHE_FILE = 'node_modules/.vite/cache/remix-og-image/cache.json'
 
 export function openGraphImagePlugin(options: Options): Plugin {
   const format = options.format || 'jpeg'
 
+  const cache = new Cache<string, CacheEntry>()
   const viteConfigPromise = new DeferredPromise<ResolvedConfig>()
   const remixContextPromise = new DeferredPromise<RemixPluginContext>()
   const serverUrlPromise = new DeferredPromise<URL>()
   const routesWithImages = new Set<ConfigRoute>()
 
-  async function getOutputDirectory() {
+  async function fromRoot(...paths: Array<string>): Promise<string> {
     const viteConfig = await viteConfigPromise
+    return path.resolve(viteConfig.root, ...paths)
+  }
 
-    return path.resolve(
-      viteConfig.root || process.cwd(),
-      options.outputDirectory
-    )
+  async function fromRemixApp(...paths: Array<string>): Promise<string> {
+    const remixContext = await remixContextPromise
+    return path.resolve(remixContext.remixConfig.appDirectory, ...paths)
+  }
+
+  async function fromOutputDirectory(...paths: Array<string>): Promise<string> {
+    return fromRoot(options.outputDirectory, ...paths)
   }
 
   async function generateOpenGraphImages(
@@ -81,6 +93,35 @@ export function openGraphImagePlugin(options: Options): Plugin {
   ): Promise<Array<GeneratedOpenGraphImage>> {
     if (!route.path) {
       return []
+    }
+
+    // See if the route already has images generated in the cache.
+    const cacheEntry = cache.get(route.id)
+    const routeStats = await fs.promises
+      .stat(await fromRemixApp(route.file))
+      .catch((error) => {
+        console.log('Failed to read stats for route "%s"', route.file, error)
+        throw error
+      })
+    const routeLastModifiedAt = routeStats.mtimeMs
+
+    if (cacheEntry) {
+      const hasRouteChanged =
+        routeLastModifiedAt > cacheEntry.routeLastModifiedAt
+      const allImagesExist = () => {
+        return (
+          cacheEntry.imagePaths.length > 0 &&
+          cacheEntry.imagePaths.every((imagePath) => {
+            return fs.existsSync(imagePath)
+          })
+        )
+      }
+
+      // Skip generating the images only if the route module hasn't changed
+      // and all the previously generated images still exist.
+      if (!hasRouteChanged && allImagesExist()) {
+        return []
+      }
     }
 
     const createRoutePath = compile(route.path)
@@ -101,7 +142,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
      * - OG route returning invalid data;
      */
 
-    const files: Array<GeneratedOpenGraphImage> = []
+    const images: Array<GeneratedOpenGraphImage> = []
 
     await Promise.all(
       allData.map(async (data) => {
@@ -157,8 +198,8 @@ export function openGraphImagePlugin(options: Options): Plugin {
             })
             .toBuffer()
 
-          files.push({
-            name: `${data.name}.${format}`,
+          images.push({
+            path: await fromOutputDirectory(`${data.name}.${format}`),
             content: optimizedImageBuffer,
           })
         } finally {
@@ -167,20 +208,29 @@ export function openGraphImagePlugin(options: Options): Plugin {
       })
     )
 
-    return files
+    cache.set(route.id, {
+      routeLastModifiedAt,
+      imagePaths: images.map((image) => image.path),
+    })
+
+    return images
   }
 
   async function writeImageToDisk(image: GeneratedOpenGraphImage) {
-    const filePath = path.resolve(await getOutputDirectory(), image.name)
-    const directoryName = path.dirname(filePath)
+    const directoryName = path.dirname(image.path)
     if (!fs.existsSync(directoryName)) {
       await fs.promises.mkdir(directoryName, { recursive: true })
     }
-    await fs.promises.writeFile(filePath, image.content)
+    await fs.promises.writeFile(image.path, image.content)
   }
 
   return {
     name: PLUGIN_NAME,
+
+    async buildStart() {
+      const viteConfig = await viteConfigPromise
+      await cache.open(path.resolve(viteConfig.root, CACHE_FILE))
+    },
 
     configResolved(config) {
       viteConfigPromise.resolve(config)
@@ -253,11 +303,9 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
       // OG image generation must only happen server-side.
       if (!options.ssr) {
-        /**
-         * @note Parse the route module and remove the special export altogether.
-         * This way, it won't be present in the client bundle, and won't affect
-         * "vite-plugin-react" and its HMR.
-         */
+        // Parse the route module and remove the special export altogether.
+        // This way, it won't be present in the client bundle, and won't affect
+        // "vite-plugin-react" and its HMR.
         const ast = parse(code, { sourceType: 'module' })
         const refs = findReferencedIdentifiers(ast)
 
@@ -290,17 +338,52 @@ export function openGraphImagePlugin(options: Options): Plugin {
           await getBrowserInstance(),
           serverUrl
         ).then((images) => images.map(writeImageToDisk))
-      } else {
-        // In build mode, collect all the OG image routes to be
-        // visited on build end, when the application build is done.
-        routesWithImages.add(route)
+      }
+
+      routesWithImages.add(route)
+    },
+
+    async handleHotUpdate(ctx) {
+      /**
+       * @fixme Vite reports HMR on emitted OG images in the public directory.
+       * Maybe make it ignore them here somehow?
+       */
+
+      const importerPaths = ctx.modules
+        .flatMap((affectedModules) => {
+          return Array.from(affectedModules.importers)
+        })
+        .map((importer) => importer.file)
+        .filter<string>((importerPath) => typeof importerPath === 'string')
+
+      // If any of the modules affected by HMR include the OG routes,
+      // re-generate the OG images for those routes. This way,
+      // changes to OG route's dependencies update the images.
+      const affectedRoutes: Array<ConfigRoute> = []
+      for (const route of routesWithImages) {
+        if (importerPaths.includes(await fromRemixApp(route.file))) {
+          affectedRoutes.push(route)
+        }
+      }
+
+      if (affectedRoutes.length > 0) {
+        const serverUrl = await serverUrlPromise
+
+        for (const route of affectedRoutes) {
+          // Clear this route's cache to force image generation.
+          cache.delete(route.id)
+
+          generateOpenGraphImages(
+            route,
+            await getBrowserInstance(),
+            serverUrl
+          ).then((images) => images.map(writeImageToDisk))
+        }
       }
     },
 
-    /**
-     * @note Use `writeBundle` and not `closeBundle` so the image generation
-     * time is counted toward the total build time.
-     */
+    // Use `writeBundle` and not `closeBundle` so the image generation
+    // time is counted toward the total build time.
     writeBundle: {
       order: 'post',
       async handler() {
@@ -338,7 +421,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
           const pendingScreenshots = Array.from(routesWithImages).map(
             (route) => {
               return generateOpenGraphImages(route, browser, serverUrl)
-                .then((images) => Promise.all(images.map(writeImageToDisk)))
+                .then((images) => images.map(writeImageToDisk))
                 .catch((error) => {
                   this.error(
                     `Failed to generate OG image for route "${route.id}": ${error}`
@@ -348,7 +431,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
           )
 
           await Promise.allSettled(pendingScreenshots)
-          await Promise.all([server.close(), browser.close()])
+          await Promise.all([server.close(), browser.close(), cache.close()])
         }
       },
     },
@@ -391,10 +474,8 @@ async function runVitePreviewServer(
       logLevel: 'error',
     },
     'serve',
-    /**
-     * @note Using `production` mode is important.
-     * It will skip all the built-in development-oriented plugins in Vite.
-     */
+    // Using `production` mode is important.
+    // It will skip all the built-in development-oriented plugins in Vite.
     'production',
     'development',
     false
@@ -402,4 +483,44 @@ async function runVitePreviewServer(
 
   const server = await createServer(previewViteConfig.inlineConfig)
   return server.listen()
+}
+
+class Cache<K, V> extends Map<K, V> {
+  private cachePath?: string
+
+  constructor() {
+    super()
+  }
+
+  public async open(cachePath: string): Promise<void> {
+    if (this.cachePath) {
+      return
+    }
+
+    this.cachePath = cachePath
+
+    if (fs.existsSync(this.cachePath)) {
+      const cacheContent = await fs.promises
+        .readFile(this.cachePath, 'utf-8')
+        .then(JSON.parse)
+        .catch(() => ({}))
+
+      for (const [key, value] of Object.entries(cacheContent)) {
+        this.set(key as K, value as V)
+      }
+    }
+  }
+
+  public async close(): Promise<void> {
+    if (!this.cachePath) {
+      throw new Error(`Failed to close cache: cache is not open`)
+    }
+
+    const cacheContent = JSON.stringify(Object.fromEntries(this.entries()))
+    const baseDirectory = path.dirname(this.cachePath)
+    if (!fs.existsSync(baseDirectory)) {
+      await fs.promises.mkdir(baseDirectory, { recursive: true })
+    }
+    await fs.promises.writeFile(this.cachePath, cacheContent, 'utf8')
+  }
 }
