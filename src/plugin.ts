@@ -336,15 +336,13 @@ export function openGraphImagePlugin(options: Options): Plugin {
         const refs = findReferencedIdentifiers(ast)
 
         traverse(ast, {
-          Identifier(path) {
+          ExportNamedDeclaration(path) {
             if (
-              t.isIdentifier(path.node) &&
-              path.node.name === EXPORT_NAME &&
-              (t.isFunctionDeclaration(path.parent) ||
-                (t.isVariableDeclarator(path.parent) &&
-                  t.isArrowFunctionExpression(path.parent.init)))
+              t.isFunctionDeclaration(path.node.declaration) &&
+              t.isIdentifier(path.node.declaration.id) &&
+              path.node.declaration.id.name === EXPORT_NAME
             ) {
-              path.replaceWith(t.identifier('undefined'))
+              path.remove()
             }
           },
         })
