@@ -43,6 +43,8 @@ interface Options {
    * @default "jpeg"
    */
   format?: 'jpeg' | 'png' | 'webp'
+
+  writeImage?: (args: { image: File }) => Promise<void>
 }
 
 interface RemixPluginContext {
@@ -50,6 +52,7 @@ interface RemixPluginContext {
 }
 
 interface GeneratedOpenGraphImage {
+  name: string
   path: string
   content: Uint8Array
 }
@@ -224,8 +227,11 @@ export function openGraphImagePlugin(options: Options): Plugin {
             })
             .toBuffer()
 
+          const imageName = `${data.name}.${format}`
+
           images.push({
-            path: await fromOutputDirectory(`${data.name}.${format}`),
+            name: imageName,
+            path: await fromOutputDirectory(imageName),
             content: optimizedImageBuffer,
           })
         } finally {
@@ -242,7 +248,13 @@ export function openGraphImagePlugin(options: Options): Plugin {
     return images
   }
 
-  async function writeImageToDisk(image: GeneratedOpenGraphImage) {
+  async function writeImage(image: GeneratedOpenGraphImage) {
+    if (options.writeImage) {
+      return await options.writeImage({
+        image: new File([image.content], image.path),
+      })
+    }
+
     const directoryName = path.dirname(image.path)
     if (!fs.existsSync(directoryName)) {
       await fs.promises.mkdir(directoryName, { recursive: true })
@@ -361,7 +373,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
           route,
           await getBrowserInstance(),
           serverUrl
-        ).then((images) => images.map(writeImageToDisk))
+        ).then((images) => images.map(writeImage))
       }
 
       routesWithImages.add(route)
@@ -401,7 +413,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
             route,
             await getBrowserInstance(),
             serverUrl
-          ).then((images) => images.map(writeImageToDisk))
+          ).then((images) => images.map(writeImage))
         }
       }
     },
@@ -445,7 +457,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
           const pendingScreenshots = Array.from(routesWithImages).map(
             (route) => {
               return generateOpenGraphImages(route, browser, serverUrl)
-                .then((images) => images.map(writeImageToDisk))
+                .then((images) => images.map(writeImage))
                 .catch((error) => {
                   this.error(
                     `Failed to generate OG image for route "${route.id}": ${error}`

@@ -134,10 +134,25 @@ export function meta() {
   - `elementSelector`, `string`, a selector for the DOM element representing the OG image (i.e. your React component). The plugin takes the screenshot of the given element, and not the entire page, so you can render the OG image preview in the same layout as the rest of your app.
   - `outputDirectory`, `string`, a path to the directory to write the image.
   - `format`, `"jpeg" | "png" | "webp"` (_optional_; default, `"jpeg"`), the format of the generated image.
+  - `writeImage`, `Function`, (_optional_), a custom function to control writing image.
 
 ```js
 import { openGraphImagePlugin } from 'remix-og-image/plugin'
 ```
+
+Use the `writeImage` option to opt-out from emitting generated images to disk, and handle them in any other way you prefer (e.g. upload to a CDN).
+
+```js
+openGraphImagePlugin({
+  // ...options.
+
+  writeImage({ image }) {
+    await uploadToCdn(image.stream())
+  }
+})
+```
+
+> The `image` argument is a regular `File`.
 
 ### `isOpenGraphImageRequest(request)`
 
