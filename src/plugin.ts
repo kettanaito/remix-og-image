@@ -131,11 +131,37 @@ export function openGraphImagePlugin(options: Options): Plugin {
     resourceUrl.searchParams.set('_data', route.id)
 
     // Fetch all the params data from the route.
-    const allData = await fetch(resourceUrl, {
+    const dataResponse = await fetch(resourceUrl, {
       headers: {
         'user-agent': OPEN_GRAPH_USER_AGENT_HEADER,
       },
-    }).then<Array<OpenGraphImageData>>((response) => response.json())
+    }).catch((error) => {
+      throw new Error(
+        `Failed to fetch Open Graph image data for route "${route.id}": ${error}`
+      )
+    })
+
+    if (!dataResponse.ok) {
+      throw new Error(
+        `Failed to fetch Open Graph image data for route "${route.id}": loader responsed with ${dataResponse.status}`
+      )
+    }
+
+    const responseContentType = dataResponse.headers.get('content-type') || ''
+    if (!responseContentType.includes('application/json')) {
+      throw new Error(
+        `Failed to fetch Open Graph image data for route "${route.id}": loader responsed with invalid content type ("${responseContentType}"). Did you forget to throw \`json(openGraphImage())\` in your loader?`
+      )
+    }
+
+    const allData = (await dataResponse.json()) as Array<OpenGraphImageData>
+
+    if (!Array.isArray(allData)) {
+      throw new Error(
+        `Failed to fetch Open Graph image data for route "${route.id}": loader responded with invalid response. Did you forget to throw \`json(openGraphImage())\` in your loader?`
+      )
+    }
+
     /**
      * @todo Improve error handling:
      * - OG route forgetting to return the data;
