@@ -140,20 +140,6 @@ export function meta() {
 import { openGraphImagePlugin } from 'remix-og-image/plugin'
 ```
 
-Use the `writeImage` option to opt-out from emitting generated images to disk, and handle them in any other way you prefer (e.g. upload to a CDN).
-
-```js
-openGraphImagePlugin({
-  // ...options.
-
-  writeImage({ image }) {
-    await uploadToCdn(image.stream())
-  }
-})
-```
-
-> The `image` argument is a regular `File`.
-
 ### `isOpenGraphImageRequest(request)`
 
 - `request`, [`Request`](https://developer.mozilla.org/en-US/docs/Web/API/Request), a request reference from the `loader` function of your OG image route.
@@ -256,3 +242,19 @@ export default function Template() {
 ```
 
 > For example, this `Template` component renders the `#og-image` element as a `1200x630` block. That will be the size of the generated OG image.
+
+### What if I don't want to write images to disk?
+
+You can opt-out from writing generated images to disk by providing the `writeImage` option to the plugin:
+
+```js
+openGraphImagePlugin({
+  // ...options.
+
+  async writeImage({ image }) {
+    await uploadToCdn(image.stream())
+  },
+})
+```
+
+> The `image` argument is a regular `File`.
