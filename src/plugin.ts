@@ -248,6 +248,8 @@ export function openGraphImagePlugin(options: Options): Plugin {
   return {
     name: PLUGIN_NAME,
 
+    apply: 'build',
+
     async buildStart() {
       const viteConfig = await viteConfigPromise
       await cache.open(path.resolve(viteConfig.root, CACHE_FILE))
