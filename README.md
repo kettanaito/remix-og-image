@@ -178,20 +178,20 @@ export async function loader({ request, params }) {
   }
 
   const { slug } = params
-  const book = await getBookBySlug(slug)
+  const post = await getPostBySlug(slug)
 
-  return { book }
+  return { post }
 }
 
 export default function Template() {
-  const { book } = useLoaderData()
+  const { post } = useLoaderData()
 
   return (
     <div
       id="og-image"
       className="w-[1200px] h-[630px] bg-blue-100 flex items-center justify-center"
     >
-      <h1 className="text-4xl">{book.title}</h1>
+      <h1 className="text-4xl">{post.title}</h1>
     </div>
   )
 }
