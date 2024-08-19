@@ -261,38 +261,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
       remixContextPromise.resolve(Reflect.get(config, '__remixPluginContext'))
     },
 
-    async configureServer(server) {
-      const viteConfig = await viteConfigPromise
-
-      if (viteConfig.command === 'build') {
-        return
-      }
-
-      const { httpServer } = server
-
-      if (!httpServer) {
-        return
-      }
-
-      // In serve mode, listen to the existing preview server.
-      httpServer.once('listening', async () => {
-        const address = httpServer.address()
-
-        if (!address) {
-          return
-        }
-
-        const url =
-          typeof address === 'string'
-            ? address
-            : `http://localhost:${address.port}`
-
-        appUrlPromise.resolve(new URL(url))
-      })
-    },
-
     async transform(code, id, options = {}) {
-      const viteConfig = await viteConfigPromise
       const remixContext = await remixContextPromise
 
       if (!remixContext) {
@@ -346,16 +315,6 @@ export function openGraphImagePlugin(options: Options): Plugin {
         // Use DCE to remove any references the special export might have had.
         deadCodeElimination(ast, refs)
         return generate(ast, { sourceMaps: true, sourceFileName: id }, code)
-      }
-
-      // In serve mode, generate images alongside the changes to routes.
-      if (viteConfig.command === 'serve' && !viteConfig.isProduction) {
-        const appUrl = await appUrlPromise
-
-        // Don't await the generation promise, let it run in the background.
-        generateOpenGraphImages(route, await getBrowserInstance(), appUrl).then(
-          (images) => images.map(writeImage)
-        )
       }
 
       routesWithImages.add(route)
