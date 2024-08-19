@@ -53,6 +53,9 @@ dependencies:
   sharp:
     specifier: ^0.33.5
     version: 0.33.5
+  turbo-stream:
+    specifier: ^2.4.0
+    version: 2.4.0
 
 devDependencies:
   '@ossjs/release':
@@ -5851,6 +5854,10 @@ packages:
 
   /turbo-stream@2.3.0:
     resolution: {integrity: sha512-PhEr9mdexoVv+rJkQ3c8TjrN3DUghX37GNJkSMksoPR4KrXIPnM2MnqRt07sViIqX9IdlhrgtTSyjoVOASq6cg==}
+    dev: false
+
+  /turbo-stream@2.4.0:
+    resolution: {integrity: sha512-FHncC10WpBd2eOmGwpmQsWLDoK4cqsA/UT/GqNoaKOQnT8uzhtCbg3EoUDMvqpOSAI0S26mr0rkjzbOO6S3v1g==}
     dev: false
 
   /type-is@1.6.18:

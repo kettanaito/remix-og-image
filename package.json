@@ -54,7 +54,8 @@
     "es-module-lexer": "^1.5.4",
     "path-to-regexp": "^7.1.0",
     "puppeteer": "^23.1.0",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "turbo-stream": "^2.4.0"
   },
   "peerDependencies": {
     "@remix-run/dev": "^2.0.0",
