@@ -215,18 +215,37 @@ export function openGraphImagePlugin(options: Options): Plugin {
             clip: ogImageBoundingBox,
           })
 
-          const optimizedImageBuffer = await sharp(imageBuffer)
-            .resize({
-              // Resize the image to the original DOM element's size.
-              // This compensates for the device scale factor.
-              width: ogImageBoundingBox.width,
-            })
-            .png({
-              compressionLevel: 9,
-              adaptiveFiltering: true,
-            })
-            .toBuffer()
+          let optimizeImageBuffer = sharp(imageBuffer)
 
+          switch (format) {
+            case 'jpeg': {
+              optimizeImageBuffer = optimizeImageBuffer.jpeg({
+                quality: 100,
+                progressive: true,
+              })
+              break
+            }
+
+            case 'png': {
+              optimizeImageBuffer = optimizeImageBuffer.png({
+                compressionLevel: 9,
+                adaptiveFiltering: true,
+              })
+              break
+            }
+
+            case 'webp': {
+              optimizeImageBuffer = optimizeImageBuffer.webp({
+                lossless: true,
+                smartSubsample: true,
+                quality: 100,
+                preset: 'picture',
+              })
+              break
+            }
+          }
+
+          const optimizedImageBuffer = await optimizeImageBuffer.toBuffer()
           const imageName = `${data.name}.${format}`
 
           images.push({
