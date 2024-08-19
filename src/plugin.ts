@@ -9,6 +9,7 @@ import {
   normalizePath,
 } from 'vite'
 import { parse as esModuleLexer } from 'es-module-lexer'
+import { decode } from 'turbo-stream'
 import sharp from 'sharp'
 import type { ResolvedRemixConfig } from '@remix-run/dev'
 import type { ConfigRoute } from '@remix-run/dev/dist/config/routes.js'
@@ -72,7 +73,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
   const cache = new Cache<string, CacheEntry>()
   const viteConfigPromise = new DeferredPromise<ResolvedConfig>()
   const remixContextPromise = new DeferredPromise<RemixPluginContext>()
-  const serverUrlPromise = new DeferredPromise<URL>()
+  const appUrlPromise = new DeferredPromise<URL>()
   const routesWithImages = new Set<ConfigRoute>()
 
   async function fromRoot(...paths: Array<string>): Promise<string> {
@@ -92,7 +93,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
   async function generateOpenGraphImages(
     route: ConfigRoute,
     browser: Browser,
-    serverUrl: URL
+    appUrl: URL
   ): Promise<Array<GeneratedOpenGraphImage>> {
     if (!route.path) {
       return []
@@ -127,58 +128,21 @@ export function openGraphImagePlugin(options: Options): Plugin {
       }
     }
 
+    const remixContext = await remixContextPromise
+    const usingSingleFetch =
+      !!remixContext.remixConfig.future.unstable_singleFetch
+
     const createRoutePath = compile(route.path)
-    const resourceUrl = new URL(route.path, serverUrl)
-    // Set the "_data" search parameter so the route can be queried
-    // like a resource route although it renders UI.
-    resourceUrl.searchParams.set('_data', route.id)
-
     // Fetch all the params data from the route.
-    const dataResponse = await fetch(resourceUrl, {
-      headers: {
-        'user-agent': OPEN_GRAPH_USER_AGENT_HEADER,
-      },
-    }).catch((error) => {
-      throw new Error(
-        `Failed to fetch Open Graph image data for route "${route.id}": ${error}`
-      )
-    })
-
-    if (!dataResponse.ok) {
-      throw new Error(
-        `Failed to fetch Open Graph image data for route "${route.id}": loader responsed with ${dataResponse.status}`
-      )
-    }
-
-    const responseContentType = dataResponse.headers.get('content-type') || ''
-    if (!responseContentType.includes('application/json')) {
-      throw new Error(
-        `Failed to fetch Open Graph image data for route "${route.id}": loader responsed with invalid content type ("${responseContentType}"). Did you forget to throw \`json(openGraphImage())\` in your loader?`
-      )
-    }
-
-    const allData = (await dataResponse.json()) as Array<OpenGraphImageData>
-
-    if (!Array.isArray(allData)) {
-      throw new Error(
-        `Failed to fetch Open Graph image data for route "${route.id}": loader responded with invalid response. Did you forget to throw \`json(openGraphImage())\` in your loader?`
-      )
-    }
-
-    /**
-     * @todo Improve error handling:
-     * - OG route forgetting to return the data;
-     * - OG route returning invalid data;
-     */
-
+    const loaderData = await getLoaderData(route, appUrl, usingSingleFetch)
     const images: Array<GeneratedOpenGraphImage> = []
 
     await Promise.all(
-      allData.map(async (data) => {
+      loaderData.map(async (data) => {
         const page = await browser.newPage()
 
         try {
-          const pageUrl = new URL(createRoutePath(data.params), serverUrl).href
+          const pageUrl = new URL(createRoutePath(data.params), appUrl).href
           await page.goto(pageUrl, { waitUntil: 'networkidle0' })
 
           // Set viewport to a 5K device equivalent.
@@ -323,7 +287,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
             ? address
             : `http://localhost:${address.port}`
 
-        serverUrlPromise.resolve(new URL(url))
+        appUrlPromise.resolve(new URL(url))
       })
     },
 
@@ -352,9 +316,10 @@ export function openGraphImagePlugin(options: Options): Plugin {
       const [, routeExports] = esModuleLexer(code)
 
       // Ignore routes that don't have the root-level special export.
-      const ogImageExport = routeExports.find((e) => e.n === EXPORT_NAME)
+      const hasSpecialExport =
+        routeExports.findIndex((e) => e.n === EXPORT_NAME) !== -1
 
-      if (!ogImageExport) {
+      if (!hasSpecialExport) {
         return
       }
 
@@ -385,25 +350,18 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
       // In serve mode, generate images alongside the changes to routes.
       if (viteConfig.command === 'serve' && !viteConfig.isProduction) {
-        const serverUrl = await serverUrlPromise
+        const appUrl = await appUrlPromise
 
         // Don't await the generation promise, let it run in the background.
-        generateOpenGraphImages(
-          route,
-          await getBrowserInstance(),
-          serverUrl
-        ).then((images) => images.map(writeImage))
+        generateOpenGraphImages(route, await getBrowserInstance(), appUrl).then(
+          (images) => images.map(writeImage)
+        )
       }
 
       routesWithImages.add(route)
     },
 
     async handleHotUpdate(ctx) {
-      /**
-       * @fixme Vite reports HMR on emitted OG images in the public directory.
-       * Maybe make it ignore them here somehow?
-       */
-
       const importerPaths = ctx.modules
         .flatMap((affectedModules) => {
           return Array.from(affectedModules.importers)
@@ -422,7 +380,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
       }
 
       if (affectedRoutes.length > 0) {
-        const serverUrl = await serverUrlPromise
+        const appUrl = await appUrlPromise
 
         for (const route of affectedRoutes) {
           // Clear this route's cache to force image generation.
@@ -431,7 +389,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
           generateOpenGraphImages(
             route,
             await getBrowserInstance(),
-            serverUrl
+            appUrl
           ).then((images) => images.map(writeImage))
         }
       }
@@ -471,11 +429,11 @@ export function openGraphImagePlugin(options: Options): Plugin {
              */
             runVitePreviewServer(viteConfig),
           ])
-          const serverUrl = new URL(server.resolvedUrls?.local?.[0]!)
+          const appUrl = new URL(server.resolvedUrls?.local?.[0]!)
 
           const pendingScreenshots = Array.from(routesWithImages).map(
             (route) => {
-              return generateOpenGraphImages(route, browser, serverUrl)
+              return generateOpenGraphImages(route, browser, appUrl)
                 .then((images) => images.map(writeImage))
                 .catch((error) => {
                   this.error(
@@ -578,4 +536,128 @@ class Cache<K, V> extends Map<K, V> {
     }
     await fs.promises.writeFile(this.cachePath, cacheContent, 'utf8')
   }
+}
+
+async function getLoaderData(
+  route: ConfigRoute,
+  appUrl: URL,
+  useSingleFetch?: boolean
+) {
+  const url = createResourceRouteUrl(route, appUrl, useSingleFetch)
+  const response = await fetch(url, {
+    headers: {
+      'user-agent': OPEN_GRAPH_USER_AGENT_HEADER,
+    },
+  }).catch((error) => {
+    throw new Error(
+      `Failed to fetch Open Graph image data for route "${url.href}": ${error}`
+    )
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with ${response.status}`
+    )
+  }
+
+  if (!response.body) {
+    throw new Error(
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with no body. Did you forget to throw \`json(openGraphImage())\` in your loader?`
+    )
+  }
+
+  const responseContentType = response.headers.get('content-type') || ''
+  if (
+    !responseContentType.includes(
+      useSingleFetch ? 'text/x-turbo' : 'application/json'
+    )
+  ) {
+    throw new Error(
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with invalid content type ("${responseContentType}"). Did you forget to throw \`json(openGraphImage())\` in your loader?`
+    )
+  }
+
+  // Consume the loader response based on the fetch mode.
+  const data = await consumeLoaderResponse(response, route, useSingleFetch)
+
+  if (!Array.isArray(data)) {
+    throw new Error(
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responded with invalid response. Did you forget to throw \`json(openGraphImage())\` in your loader?`
+    )
+  }
+
+  return data
+}
+
+/**
+ * Create a URL for the given route so it can be queried
+ * as a resource route. Respects Single fetch mode.
+ */
+function createResourceRouteUrl(
+  route: ConfigRoute,
+  appUrl: URL,
+  useSingleFetch?: boolean
+) {
+  if (!route.path) {
+    throw new Error(
+      `Failed to create resource route URL for route "${route.id}": route has no path`
+    )
+  }
+
+  const url = new URL(route.path, appUrl)
+
+  if (useSingleFetch) {
+    url.pathname += '.data'
+    url.searchParams.set('_route', route.id)
+  } else {
+    // Set the "_data" search parameter so the route can be queried
+    // like a resource route although it renders UI.
+    url.searchParams.set('_data', route.id)
+  }
+
+  return url
+}
+
+async function consumeLoaderResponse(
+  response: Response,
+  route: ConfigRoute,
+  useSingleFetch?: boolean
+): Promise<Array<OpenGraphImageData>> {
+  if (!response.body) {
+    throw new Error(`Failed to read loader response: response has no body`)
+  }
+
+  // If the app is using Single fetch, decode the loader
+  // payload properly using the `turbo-stream` package.
+  if (useSingleFetch) {
+    const bodyStream = await decode(response.body)
+    await bodyStream.done
+
+    const decodedBody = bodyStream.value as Record<string, unknown>
+    if (!decodedBody) {
+      throw new Error(
+        `Failed to consume loader response for route "${route.id}`
+      )
+    }
+
+    const routePayload = decodedBody[route.id]
+    if (!routePayload) {
+      throw new Error(
+        `Failed to consume loader response for route "${route.id}": route not found in decoded response`
+      )
+    }
+
+    const data = (routePayload as any).data as Array<OpenGraphImageData>
+    if (!data) {
+      throw new Error(
+        `Failed to consume loader response for route "${route.id}": route has no data`
+      )
+    }
+
+    return data
+  }
+
+  // If the app is using the legacy loader response,
+  // read it as JSON (it's not encoded).
+  return response.json()
 }

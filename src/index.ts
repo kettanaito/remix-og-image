@@ -1,4 +1,4 @@
-export const OPEN_GRAPH_USER_AGENT_HEADER = 'vite-remix-og-image-plugin'
+export const OPEN_GRAPH_USER_AGENT_HEADER = 'remix-og-image'
 
 export interface OpenGraphImageData {
   name: string
