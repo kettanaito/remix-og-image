@@ -46,6 +46,10 @@ interface Options {
   format?: 'jpeg' | 'png' | 'webp'
 
   writeImage?: (args: { image: File }) => Promise<void>
+
+  browser?: {
+    executablePath?: string
+  }
 }
 
 interface RemixPluginContext {
@@ -414,7 +418,9 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
 let browser: Browser | undefined
 
-async function getBrowserInstance(): Promise<Browser> {
+async function getBrowserInstance(
+  options: Options['browser'] = {},
+): Promise<Browser> {
   if (browser) {
     return browser
   }
@@ -427,6 +433,7 @@ async function getBrowserInstance(): Promise<Browser> {
       '--disable-gpu',
       '--disable-software-rasterizer',
     ],
+    executablePath: options.executablePath,
   })
 
   return browser
