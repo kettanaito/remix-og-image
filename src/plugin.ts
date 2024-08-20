@@ -1,5 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import type { Writable } from 'node:stream'
+import { performance, PerformanceObserver } from 'node:perf_hooks'
 import {
   type Plugin,
   type ResolvedConfig,
@@ -26,6 +28,16 @@ import {
   type OpenGraphImageData,
 } from './index.js'
 
+const perfObserver = new PerformanceObserver((items) => {
+  items.getEntries().forEach((entry) => {
+    console.log(entry)
+  })
+})
+
+perfObserver.observe({ entryTypes: ['measure'], buffered: true })
+
+console.log('PERFORMANCE ACTIVATED!')
+
 interface Options {
   /**
    * Selector for the element to capture as the Open Graph image.
@@ -45,7 +57,7 @@ interface Options {
    */
   format?: 'jpeg' | 'png' | 'webp'
 
-  writeImage?: (args: { image: File }) => Promise<void>
+  writeImage?: (args: { stream: Writable }) => Promise<void>
 }
 
 interface RemixPluginContext {
@@ -55,7 +67,7 @@ interface RemixPluginContext {
 interface GeneratedOpenGraphImage {
   name: string
   path: string
-  content: Uint8Array
+  stream: Writable
 }
 
 interface CacheEntry {
@@ -71,6 +83,8 @@ export function openGraphImagePlugin(options: Options): Plugin {
   const format = options.format || 'jpeg'
 
   const cache = new Cache<string, CacheEntry>()
+  const browserPromise = new DeferredPromise<Browser>()
+  const vitePreviewPromise = new DeferredPromise<ViteDevServer>()
   const viteConfigPromise = new DeferredPromise<ResolvedConfig>()
   const remixContextPromise = new DeferredPromise<RemixPluginContext>()
   const appUrlPromise = new DeferredPromise<URL>()
@@ -98,6 +112,8 @@ export function openGraphImagePlugin(options: Options): Plugin {
     if (!route.path) {
       return []
     }
+
+    performance.mark(`generate-image-${route.id}-start`)
 
     // See if the route already has images generated in the cache.
     const cacheEntry = cache.get(route.id)
@@ -133,17 +149,55 @@ export function openGraphImagePlugin(options: Options): Plugin {
       !!remixContext.remixConfig.future.unstable_singleFetch
 
     const createRoutePath = compile(route.path)
+
+    performance.mark(`generate-image-${route.id}-loader-start`)
+
     // Fetch all the params data from the route.
     const loaderData = await getLoaderData(route, appUrl, usingSingleFetch)
+
+    performance.mark(`generate-image-${route.id}-loader-end`)
+    performance.measure(
+      `generate-image-${route.id}:loader`,
+      `generate-image-${route.id}-loader-start`,
+      `generate-image-${route.id}-loader-end`
+    )
+
     const images: Array<GeneratedOpenGraphImage> = []
 
     await Promise.all(
       loaderData.map(async (data) => {
+        performance.mark(`generate-image-${route.id}-${data.name}-start`)
+
+        performance.mark(
+          `generate-image-${route.id}-${data.name}-new-page-start`
+        )
+
         const page = await browser.newPage()
+
+        performance.mark(`generate-image-${route.id}-${data.name}-new-page-end`)
+        performance.measure(
+          `generate-image-${route.id}-${data.name}:new-page`,
+          `generate-image-${route.id}-${data.name}-new-page-start`,
+          `generate-image-${route.id}-${data.name}-new-page-end`
+        )
 
         try {
           const pageUrl = new URL(createRoutePath(data.params), appUrl).href
-          await page.goto(pageUrl, { waitUntil: 'networkidle0' })
+
+          performance.mark(
+            `generate-image-${route.id}-${data.name}-pageload-start`
+          )
+
+          await page.goto(pageUrl, { waitUntil: 'domcontentloaded' })
+
+          performance.mark(
+            `generate-image-${route.id}-${data.name}-pageload-end`
+          )
+          performance.measure(
+            `generate-image-${route.id}-${data.name}:pageload`,
+            `generate-image-${route.id}-${data.name}-pageload-start`,
+            `generate-image-${route.id}-${data.name}-pageload-end`
+          )
 
           // Set viewport to a 5K device equivalent.
           // This is more than enough to ensure that the OG image is visible.
@@ -156,18 +210,22 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
           const ogImageBoundingBox = await page
             .$(options.elementSelector)
-            .then((element) => element?.boundingBox())
+            .then(async (element) => {
+              if (!element) {
+                return
+              }
+
+              await element.scrollIntoView()
+              return element.boundingBox()
+            })
 
           if (!ogImageBoundingBox) {
             return []
           }
 
-          await page.evaluate((selector) => {
-            const element = document.querySelector(selector)
-            if (element) {
-              element.scrollIntoView(true)
-            }
-          }, options.elementSelector)
+          performance.mark(
+            `generate-image-${route.id}-${data.name}-screenshot-start`
+          )
 
           const imageBuffer = await page.screenshot({
             type: format,
@@ -177,13 +235,23 @@ export function openGraphImagePlugin(options: Options): Plugin {
             // to capture only the image and ignore any otherwise
             // present UI, like the layout.
             clip: ogImageBoundingBox,
+            optimizeForSpeed: true,
           })
 
-          let optimizeImageBuffer = sharp(imageBuffer)
+          performance.mark(
+            `generate-image-${route.id}-${data.name}-screenshot-end`
+          )
+          performance.measure(
+            `generate-image-${route.id}-${data.name}:screenshot`,
+            `generate-image-${route.id}-${data.name}-screenshot-start`,
+            `generate-image-${route.id}-${data.name}-screenshot-end`
+          )
+
+          let imageStream = sharp(imageBuffer)
 
           switch (format) {
             case 'jpeg': {
-              optimizeImageBuffer = optimizeImageBuffer.jpeg({
+              imageStream = imageStream.jpeg({
                 quality: 100,
                 progressive: true,
               })
@@ -191,7 +259,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
             }
 
             case 'png': {
-              optimizeImageBuffer = optimizeImageBuffer.png({
+              imageStream = imageStream.png({
                 compressionLevel: 9,
                 adaptiveFiltering: true,
               })
@@ -199,7 +267,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
             }
 
             case 'webp': {
-              optimizeImageBuffer = optimizeImageBuffer.webp({
+              imageStream = imageStream.webp({
                 lossless: true,
                 smartSubsample: true,
                 quality: 100,
@@ -209,18 +277,31 @@ export function openGraphImagePlugin(options: Options): Plugin {
             }
           }
 
-          const optimizedImageBuffer = await optimizeImageBuffer.toBuffer()
           const imageName = `${data.name}.${format}`
 
           images.push({
             name: imageName,
             path: await fromOutputDirectory(imageName),
-            content: optimizedImageBuffer,
+            stream: imageStream,
           })
         } finally {
           await page.close({ runBeforeUnload: false })
+
+          performance.mark(`generate-image-${route.id}-${data.name}-end`)
+          performance.measure(
+            `generate-image-${route.id}-${data.name}`,
+            `generate-image-${route.id}-${data.name}-start`,
+            `generate-image-${route.id}-${data.name}-end`
+          )
         }
       })
+    )
+
+    performance.mark(`generate-image-${route.id}-end`)
+    performance.measure(
+      `generate-image-${route.id}`,
+      `generate-image-${route.id}-start`,
+      `generate-image-${route.id}-end`
     )
 
     cache.set(route.id, {
@@ -234,7 +315,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
   async function writeImage(image: GeneratedOpenGraphImage) {
     if (options.writeImage) {
       return await options.writeImage({
-        image: new File([image.content], image.path),
+        stream: image.stream,
       })
     }
 
@@ -242,8 +323,10 @@ export function openGraphImagePlugin(options: Options): Plugin {
     if (!fs.existsSync(directoryName)) {
       await fs.promises.mkdir(directoryName, { recursive: true })
     }
-    await fs.promises.writeFile(image.path, image.content)
+    await fs.promises.writeFile(image.path, image.stream)
   }
+
+  performance.mark('plugin-start')
 
   return {
     name: PLUGIN_NAME,
@@ -319,6 +402,14 @@ export function openGraphImagePlugin(options: Options): Plugin {
         return generate(ast, { sourceMaps: true, sourceFileName: id }, code)
       }
 
+      // Spawn the browser immediately once we detect an OG image route.
+      if (routesWithImages.size === 0) {
+        browserPromise.resolve(getBrowserInstance())
+        vitePreviewPromise.resolve(
+          runVitePreviewServer(await viteConfigPromise)
+        )
+      }
+
       routesWithImages.add(route)
     },
 
@@ -351,7 +442,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
             route,
             await getBrowserInstance(),
             appUrl
-          ).then((images) => images.map(writeImage))
+          ).then((images) => Promise.all(images.map(writeImage)))
         }
       }
     },
@@ -381,31 +472,35 @@ export function openGraphImagePlugin(options: Options): Plugin {
           )
 
           const [browser, server] = await Promise.all([
-            getBrowserInstance(),
+            browserPromise,
 
             /**
              * @fixme Vite preview server someties throws:
              * "Error: The server is being restarted or closed. Request is outdated."
              * when trying to navigate to it. It requires a refresh to work.
              */
-            runVitePreviewServer(viteConfig),
+            vitePreviewPromise,
           ])
           const appUrl = new URL(server.resolvedUrls?.local?.[0]!)
+          const pendingScreenshots: Array<Promise<unknown>> = []
 
-          const pendingScreenshots = Array.from(routesWithImages).map(
-            (route) => {
-              return generateOpenGraphImages(route, browser, appUrl)
-                .then((images) => images.map(writeImage))
+          for (const route of routesWithImages) {
+            pendingScreenshots.push(
+              generateOpenGraphImages(route, browser, appUrl)
+                .then((images) => Promise.all(images.map(writeImage)))
                 .catch((error) => {
                   this.error(
                     `Failed to generate OG image for route "${route.id}": ${error}`
                   )
                 })
-            }
-          )
+            )
+          }
 
           await Promise.allSettled(pendingScreenshots)
           await Promise.all([server.close(), browser.close(), cache.close()])
+
+          performance.mark('plugin-end')
+          performance.measure('plugin', 'plugin-start', 'plugin-end')
         }
       },
     },
@@ -419,7 +514,17 @@ async function getBrowserInstance(): Promise<Browser> {
     return browser
   }
 
+  performance.mark('browser-launch-start')
+
   browser = await launch({ headless: true })
+
+  performance.mark('browser-launch-end')
+  performance.measure(
+    'browser-launch',
+    'browser-launch-start',
+    'browser-launch-end'
+  )
+
   return browser
 }
 
@@ -435,16 +540,14 @@ async function runVitePreviewServer(
    */
   process.env.NODE_ENV = 'development'
 
+  performance.mark('vite-preview-resolve-config-start')
+
   // Use the `resolveConfig` function explicitly because it
   // allows passing options like `command` and `mode` to Vite.
   const previewViteConfig = await resolveConfig(
     {
       root: viteConfig.root,
       configFile: viteConfig.configFile,
-      /**
-       * @fixme Despite the log levels, this server stills prints
-       * "Using vars defined in XYZ" when run. Is there a way to turn that off?
-       */
       logLevel: 'error',
     },
     'serve',
@@ -455,7 +558,24 @@ async function runVitePreviewServer(
     false
   )
 
+  performance.mark('vite-preview-resolve-config-end')
+  performance.measure(
+    'vite-preview-resolve-config',
+    'vite-preview-resolve-config-start',
+    'vite-preview-resolve-config-end'
+  )
+
+  performance.mark('vite-preview-server-start')
+
   const server = await createServer(previewViteConfig.inlineConfig)
+
+  performance.mark('vite-preview-server-end')
+  performance.measure(
+    'vite-preview-server',
+    'vite-preview-server-start',
+    'vite-preview-server-end'
+  )
+
   return server.listen()
 }
 
@@ -495,7 +615,7 @@ class Cache<K, V> extends Map<K, V> {
     if (!fs.existsSync(baseDirectory)) {
       await fs.promises.mkdir(baseDirectory, { recursive: true })
     }
-    await fs.promises.writeFile(this.cachePath, cacheContent, 'utf8')
+    return fs.promises.writeFile(this.cachePath, cacheContent, 'utf8')
   }
 }
 
