@@ -188,7 +188,18 @@ export function openGraphImagePlugin(options: Options): Plugin {
             `generate-image-${route.id}-${data.name}-pageload-start`
           )
 
-          await page.goto(pageUrl, { waitUntil: 'domcontentloaded' })
+          await Promise.all([
+            page.goto(pageUrl, { waitUntil: 'domcontentloaded' }),
+
+            // Set viewport to a 5K device equivalent.
+            // This is more than enough to ensure that the OG image is visible.
+            page.setViewport({
+              width: 5120,
+              height: 2880,
+              // Use a larger scale factor to get a crisp image.
+              deviceScaleFactor: 2,
+            }),
+          ])
 
           performance.mark(
             `generate-image-${route.id}-${data.name}-pageload-end`
@@ -198,15 +209,6 @@ export function openGraphImagePlugin(options: Options): Plugin {
             `generate-image-${route.id}-${data.name}-pageload-start`,
             `generate-image-${route.id}-${data.name}-pageload-end`
           )
-
-          // Set viewport to a 5K device equivalent.
-          // This is more than enough to ensure that the OG image is visible.
-          await page.setViewport({
-            width: 5120,
-            height: 2880,
-            // Use a larger scale factor to get a crisp image.
-            deviceScaleFactor: 2,
-          })
 
           const ogImageBoundingBox = await page
             .$(options.elementSelector)
