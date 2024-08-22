@@ -212,11 +212,47 @@ export function openGraphImagePlugin(options: Options): Plugin {
           const optimizedImageBuffer = await optimizeImageBuffer.toBuffer()
           const imageName = `${data.name}.${format}`
 
+          const outputPath = await fromOutputDirectory(imageName)
+
           images.push({
             name: imageName,
-            path: await fromOutputDirectory(imageName),
+            path: outputPath,
             content: optimizedImageBuffer,
           })
+
+          // check if outputPath is somewhere in `public` directory
+          if (outputPath.includes("public")) {
+            // strip the path upto the public part of the path
+            const imagePath = outputPath.split("public")[1];
+
+            // this property does exist in the remixConfig
+            // but are missing in the types
+            // not sure if this is the best way to check for it
+            // TODO: there must be a better way to resolve this
+            // see: https://remix.run/docs/en/main/file-conventions/vite-config#builddirectory
+            if (
+              "buildDirectory" in remixContext.remixConfig &&
+              typeof remixContext.remixConfig.buildDirectory === "string"
+            ) {
+              if (imagePath) {
+                const clientPath = path.join(
+                  remixContext.remixConfig.buildDirectory,
+                  "client",
+                  imagePath
+                );
+
+                // we want to create the assets at both the locations
+                // i.e. the `outputDirectory` and the build directory of the remix app
+                // so that the images are available during dev/preview and serve
+                images.push({
+                  name: imageName,
+                  path: clientPath,
+                  content: optimizedImageBuffer,
+                });
+              }
+            }
+          }
+
         } finally {
           await page.close({ runBeforeUnload: false })
         }
