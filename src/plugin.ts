@@ -701,6 +701,26 @@ function createResourceRouteUrl(
   return url
 }
 
+async function decodeTurboStreamResponse(
+  response: Response
+): Promise<Record<string, { data: unknown }>> {
+  if (!response.body) {
+    throw new Error(
+      `Failed to decode turbo-stream response: response has no body`
+    )
+  }
+
+  const bodyStream = await decode(response.body)
+  await bodyStream.done
+
+  const decodedBody = bodyStream.value as Record<string, { data: unknown }>
+  if (!decodedBody) {
+    throw new Error(`Failed to decode turbo-stream response`)
+  }
+
+  return decodedBody
+}
+
 async function consumeLoaderResponse(
   response: Response,
   route: ConfigRoute,
@@ -713,17 +733,9 @@ async function consumeLoaderResponse(
   // If the app is using Single fetch, decode the loader
   // payload properly using the `turbo-stream` package.
   if (useSingleFetch) {
-    const bodyStream = await decode(response.body)
-    await bodyStream.done
-
-    const decodedBody = bodyStream.value as Record<string, unknown>
-    if (!decodedBody) {
-      throw new Error(
-        `Failed to consume loader response for route "${route.id}`
-      )
-    }
-
+    const decodedBody = await decodeTurboStreamResponse(response)
     const routePayload = decodedBody[route.id]
+
     if (!routePayload) {
       throw new Error(
         `Failed to consume loader response for route "${route.id}": route not found in decoded response`
@@ -731,6 +743,7 @@ async function consumeLoaderResponse(
     }
 
     const data = (routePayload as any).data as Array<OpenGraphImageData>
+
     if (!data) {
       throw new Error(
         `Failed to consume loader response for route "${route.id}": route has no data`
