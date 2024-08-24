@@ -47,7 +47,7 @@ export default defineConfig({
       elementSelector: '#og-image',
 
       // Specify where to save the generated images.
-      outputDirectory: './public/og',
+      outputDirectory: './og',
     }),
   ],
 })
