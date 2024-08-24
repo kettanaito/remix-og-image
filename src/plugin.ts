@@ -11,7 +11,7 @@ import {
 import { parse as esModuleLexer } from 'es-module-lexer'
 import { decode } from 'turbo-stream'
 import sharp from 'sharp'
-import type { ResolvedRemixConfig } from '@remix-run/dev'
+import type { VitePluginConfig as RemixVitePluginConfig } from '@remix-run/dev'
 import type { ConfigRoute } from '@remix-run/dev/dist/config/routes.js'
 import { DeferredPromise } from '@open-draft/deferred-promise'
 import {
@@ -34,8 +34,8 @@ interface Options {
   elementSelector: string
 
   /**
-   * Directory to output the generated images.
-   * This is likely somewhere in your `public` directory.
+   * Relative path to the directory to store generated images.
+   * Relative to the client build assets (e.g. `/build/client`).
    */
   outputDirectory: string
 
@@ -49,7 +49,7 @@ interface Options {
 }
 
 interface RemixPluginContext {
-  remixConfig: ResolvedRemixConfig
+  remixConfig: Required<RemixVitePluginConfig>
 }
 
 interface GeneratedOpenGraphImage {
@@ -68,6 +68,12 @@ const EXPORT_NAME = 'openGraphImage'
 const CACHE_FILE = 'node_modules/.vite/cache/remix-og-image/cache.json'
 
 export function openGraphImagePlugin(options: Options): Plugin {
+  if (path.isAbsolute(options.outputDirectory)) {
+    throw new Error(
+      `Failed to initialize plugin: expected "outputDirectory" to be a relative path but got "${options.outputDirectory}". Please make sure it starts with "./".`
+    )
+  }
+
   const format = options.format || 'jpeg'
 
   const cache = new Cache<string, CacheEntry>()
@@ -76,18 +82,22 @@ export function openGraphImagePlugin(options: Options): Plugin {
   const appUrlPromise = new DeferredPromise<URL>()
   const routesWithImages = new Set<ConfigRoute>()
 
-  async function fromRoot(...paths: Array<string>): Promise<string> {
-    const viteConfig = await viteConfigPromise
-    return path.resolve(viteConfig.root, ...paths)
-  }
-
   async function fromRemixApp(...paths: Array<string>): Promise<string> {
     const remixContext = await remixContextPromise
     return path.resolve(remixContext.remixConfig.appDirectory, ...paths)
   }
 
+  async function fromViteBuild(...paths: Array<string>): Promise<string> {
+    const remixContext = await remixContextPromise
+    return path.resolve(
+      remixContext.remixConfig.buildDirectory,
+      'client',
+      ...paths
+    )
+  }
+
   async function fromOutputDirectory(...paths: Array<string>): Promise<string> {
-    return fromRoot(options.outputDirectory, ...paths)
+    return fromViteBuild(options.outputDirectory, ...paths)
   }
 
   async function generateOpenGraphImages(
@@ -243,6 +253,8 @@ export function openGraphImagePlugin(options: Options): Plugin {
       await fs.promises.mkdir(directoryName, { recursive: true })
     }
     await fs.promises.writeFile(image.path, image.content)
+
+    console.log(`Generated OG image at "${image.path}".`)
   }
 
   return {
