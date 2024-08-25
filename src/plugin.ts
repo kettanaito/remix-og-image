@@ -334,40 +334,6 @@ export function openGraphImagePlugin(options: Options): Plugin {
       routesWithImages.add(route)
     },
 
-    async handleHotUpdate(ctx) {
-      const importerPaths = ctx.modules
-        .flatMap((affectedModules) => {
-          return Array.from(affectedModules.importers)
-        })
-        .map((importer) => importer.file)
-        .filter<string>((importerPath) => typeof importerPath === 'string')
-
-      // If any of the modules affected by HMR include the OG routes,
-      // re-generate the OG images for those routes. This way,
-      // changes to OG route's dependencies update the images.
-      const affectedRoutes: Array<ConfigRoute> = []
-      for (const route of routesWithImages) {
-        if (importerPaths.includes(await fromRemixApp(route.file))) {
-          affectedRoutes.push(route)
-        }
-      }
-
-      if (affectedRoutes.length > 0) {
-        const appUrl = await appUrlPromise
-
-        for (const route of affectedRoutes) {
-          // Clear this route's cache to force image generation.
-          cache.delete(route.id)
-
-          generateOpenGraphImages(
-            route,
-            await getBrowserInstance(),
-            appUrl
-          ).then((images) => images.map(writeImage))
-        }
-      }
-    },
-
     // Use `writeBundle` and not `closeBundle` so the image generation
     // time is counted toward the total build time.
     writeBundle: {
