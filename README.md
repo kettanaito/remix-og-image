@@ -47,7 +47,7 @@ export default defineConfig({
       elementSelector: '#og-image',
 
       // Specify where to save the generated images.
-      outputDirectory: './public/og',
+      outputDirectory: './og',
     }),
   ],
 })
@@ -132,7 +132,7 @@ export function meta() {
 
 - `options`
   - `elementSelector`, `string`, a selector for the DOM element representing the OG image (i.e. your React component). The plugin takes the screenshot of the given element, and not the entire page, so you can render the OG image preview in the same layout as the rest of your app.
-  - `outputDirectory`, `string`, a path to the directory to write the image.
+  - `outputDirectory`, `string`, a _relative_ path to the directory to write the image. Relative to the client build assets directory (e.g. `/build/client`).
   - `format`, `"jpeg" | "png" | "webp"` (_optional_; default, `"jpeg"`), the format of the generated image.
   - `writeImage`, `Function`, (_optional_), a custom function to control writing image.
 
