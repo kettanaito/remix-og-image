@@ -82,7 +82,7 @@ const CACHE_FILE = 'node_modules/.vite/cache/remix-og-image/cache.json'
 export function openGraphImagePlugin(options: Options): Plugin {
   if (path.isAbsolute(options.outputDirectory)) {
     throw new Error(
-      `Failed to initialize plugin: expected "outputDirectory" to be a relative path but got "${options.outputDirectory}". Please make sure it starts with "./".`
+      `Failed to initialize plugin: expected "outputDirectory" to be a relative path but got "${options.outputDirectory}". Please make sure it starts with "./".`,
     )
   }
 
@@ -93,7 +93,6 @@ export function openGraphImagePlugin(options: Options): Plugin {
   const vitePreviewPromise = new DeferredPromise<ViteDevServer>()
   const viteConfigPromise = new DeferredPromise<ResolvedConfig>()
   const remixContextPromise = new DeferredPromise<RemixPluginContext>()
-  const appUrlPromise = new DeferredPromise<URL>()
   const routesWithImages = new Set<ConfigRoute>()
 
   async function fromRemixApp(...paths: Array<string>): Promise<string> {
@@ -106,7 +105,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
     return path.resolve(
       remixContext.remixConfig.buildDirectory,
       'client',
-      ...paths
+      ...paths,
     )
   }
 
@@ -117,7 +116,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
   async function generateOpenGraphImages(
     route: ConfigRoute,
     browser: Browser,
-    appUrl: URL
+    appUrl: URL,
   ): Promise<Array<GeneratedOpenGraphImage>> {
     if (!route.path) {
       return []
@@ -169,7 +168,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
     performance.measure(
       `generate-image-${route.id}:loader`,
       `generate-image-${route.id}-loader-start`,
-      `generate-image-${route.id}-loader-end`
+      `generate-image-${route.id}-loader-end`,
     )
 
     const images: Array<GeneratedOpenGraphImage> = []
@@ -179,7 +178,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
         performance.mark(`generate-image-${route.id}-${data.name}-start`)
 
         performance.mark(
-          `generate-image-${route.id}-${data.name}-new-page-start`
+          `generate-image-${route.id}-${data.name}-new-page-start`,
         )
 
         const page = await browser.newPage()
@@ -188,14 +187,14 @@ export function openGraphImagePlugin(options: Options): Plugin {
         performance.measure(
           `generate-image-${route.id}-${data.name}:new-page`,
           `generate-image-${route.id}-${data.name}-new-page-start`,
-          `generate-image-${route.id}-${data.name}-new-page-end`
+          `generate-image-${route.id}-${data.name}-new-page-end`,
         )
 
         try {
           const pageUrl = new URL(createRoutePath(data.params), appUrl).href
 
           performance.mark(
-            `generate-image-${route.id}-${data.name}-pageload-start`
+            `generate-image-${route.id}-${data.name}-pageload-start`,
           )
 
           await Promise.all([
@@ -212,12 +211,12 @@ export function openGraphImagePlugin(options: Options): Plugin {
           ])
 
           performance.mark(
-            `generate-image-${route.id}-${data.name}-pageload-end`
+            `generate-image-${route.id}-${data.name}-pageload-end`,
           )
           performance.measure(
             `generate-image-${route.id}-${data.name}:pageload`,
             `generate-image-${route.id}-${data.name}-pageload-start`,
-            `generate-image-${route.id}-${data.name}-pageload-end`
+            `generate-image-${route.id}-${data.name}-pageload-end`,
           )
 
           const ogImageBoundingBox = await page
@@ -236,7 +235,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
           }
 
           performance.mark(
-            `generate-image-${route.id}-${data.name}-screenshot-start`
+            `generate-image-${route.id}-${data.name}-screenshot-start`,
           )
 
           const imageBuffer = await page.screenshot({
@@ -251,12 +250,12 @@ export function openGraphImagePlugin(options: Options): Plugin {
           })
 
           performance.mark(
-            `generate-image-${route.id}-${data.name}-screenshot-end`
+            `generate-image-${route.id}-${data.name}-screenshot-end`,
           )
           performance.measure(
             `generate-image-${route.id}-${data.name}:screenshot`,
             `generate-image-${route.id}-${data.name}-screenshot-start`,
-            `generate-image-${route.id}-${data.name}-screenshot-end`
+            `generate-image-${route.id}-${data.name}-screenshot-end`,
           )
 
           let imageStream = sharp(imageBuffer)
@@ -303,17 +302,17 @@ export function openGraphImagePlugin(options: Options): Plugin {
           performance.measure(
             `generate-image-${route.id}-${data.name}`,
             `generate-image-${route.id}-${data.name}-start`,
-            `generate-image-${route.id}-${data.name}-end`
+            `generate-image-${route.id}-${data.name}-end`,
           )
         }
-      })
+      }),
     )
 
     performance.mark(`generate-image-${route.id}-end`)
     performance.measure(
       `generate-image-${route.id}`,
       `generate-image-${route.id}-start`,
-      `generate-image-${route.id}-end`
+      `generate-image-${route.id}-end`,
     )
 
     cache.set(route.id, {
@@ -367,12 +366,12 @@ export function openGraphImagePlugin(options: Options): Plugin {
       }
 
       const routePath = normalizePath(
-        path.relative(remixContext.remixConfig.appDirectory, id)
+        path.relative(remixContext.remixConfig.appDirectory, id),
       )
       const route = Object.values(remixContext.remixConfig.routes).find(
         (route) => {
           return normalizePath(route.file) === routePath
-        }
+        },
       )
 
       // Ignore non-route modules.
@@ -419,7 +418,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
       if (routesWithImages.size === 0) {
         browserPromise.resolve(getBrowserInstance())
         vitePreviewPromise.resolve(
-          runVitePreviewServer(await viteConfigPromise)
+          runVitePreviewServer(await viteConfigPromise),
         )
       }
 
@@ -447,7 +446,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
         ) {
           console.log(
             'Generating OG images for %d route(s)...',
-            routesWithImages.size
+            routesWithImages.size,
           )
 
           const [browser, server] = await Promise.all([
@@ -469,9 +468,9 @@ export function openGraphImagePlugin(options: Options): Plugin {
                 .then((images) => Promise.all(images.map(writeImage)))
                 .catch((error) => {
                   this.error(
-                    `Failed to generate OG image for route "${route.id}": ${error}`
+                    `Failed to generate OG image for route "${route.id}": ${error}`,
                   )
-                })
+                }),
             )
           }
 
@@ -501,14 +500,14 @@ async function getBrowserInstance(): Promise<Browser> {
   performance.measure(
     'browser-launch',
     'browser-launch-start',
-    'browser-launch-end'
+    'browser-launch-end',
   )
 
   return browser
 }
 
 async function runVitePreviewServer(
-  viteConfig: ResolvedConfig
+  viteConfig: ResolvedConfig,
 ): Promise<ViteDevServer> {
   /**
    * @note Force `NODE_ENV` to be "development" for the preview server.
@@ -534,14 +533,14 @@ async function runVitePreviewServer(
     // It will skip all the built-in development-oriented plugins in Vite.
     'production',
     'development',
-    false
+    false,
   )
 
   performance.mark('vite-preview-resolve-config-end')
   performance.measure(
     'vite-preview-resolve-config',
     'vite-preview-resolve-config-start',
-    'vite-preview-resolve-config-end'
+    'vite-preview-resolve-config-end',
   )
 
   performance.mark('vite-preview-server-start')
@@ -552,7 +551,7 @@ async function runVitePreviewServer(
   performance.measure(
     'vite-preview-server',
     'vite-preview-server-start',
-    'vite-preview-server-end'
+    'vite-preview-server-end',
   )
 
   return server.listen()
@@ -601,7 +600,7 @@ class Cache<K, V> extends Map<K, V> {
 async function getLoaderData(
   route: ConfigRoute,
   appUrl: URL,
-  useSingleFetch?: boolean
+  useSingleFetch?: boolean,
 ) {
   const url = createResourceRouteUrl(route, appUrl, useSingleFetch)
   const response = await fetch(url, {
@@ -610,30 +609,30 @@ async function getLoaderData(
     },
   }).catch((error) => {
     throw new Error(
-      `Failed to fetch Open Graph image data for route "${url.href}": ${error}`
+      `Failed to fetch Open Graph image data for route "${url.href}": ${error}`,
     )
   })
 
   if (!response.ok) {
     throw new Error(
-      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with ${response.status}`
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with ${response.status}`,
     )
   }
 
   if (!response.body) {
     throw new Error(
-      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with no body. Did you forget to throw \`json(openGraphImage())\` in your loader?`
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with no body. Did you forget to throw \`json(openGraphImage())\` in your loader?`,
     )
   }
 
   const responseContentType = response.headers.get('content-type') || ''
   if (
     !responseContentType.includes(
-      useSingleFetch ? 'text/x-turbo' : 'application/json'
+      useSingleFetch ? 'text/x-turbo' : 'application/json',
     )
   ) {
     throw new Error(
-      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with invalid content type ("${responseContentType}"). Did you forget to throw \`json(openGraphImage())\` in your loader?`
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with invalid content type ("${responseContentType}"). Did you forget to throw \`json(openGraphImage())\` in your loader?`,
     )
   }
 
@@ -642,7 +641,7 @@ async function getLoaderData(
 
   if (!Array.isArray(data)) {
     throw new Error(
-      `Failed to fetch Open Graph image data for route "${url.href}": loader responded with invalid response. Did you forget to throw \`json(openGraphImage())\` in your loader?`
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responded with invalid response. Did you forget to throw \`json(openGraphImage())\` in your loader?`,
     )
   }
 
@@ -656,11 +655,11 @@ async function getLoaderData(
 function createResourceRouteUrl(
   route: ConfigRoute,
   appUrl: URL,
-  useSingleFetch?: boolean
+  useSingleFetch?: boolean,
 ) {
   if (!route.path) {
     throw new Error(
-      `Failed to create resource route URL for route "${route.id}": route has no path`
+      `Failed to create resource route URL for route "${route.id}": route has no path`,
     )
   }
 
@@ -679,11 +678,11 @@ function createResourceRouteUrl(
 }
 
 async function decodeTurboStreamResponse(
-  response: Response
+  response: Response,
 ): Promise<Record<string, { data: unknown }>> {
   if (!response.body) {
     throw new Error(
-      `Failed to decode turbo-stream response: response has no body`
+      `Failed to decode turbo-stream response: response has no body`,
     )
   }
 
@@ -701,7 +700,7 @@ async function decodeTurboStreamResponse(
 async function consumeLoaderResponse(
   response: Response,
   route: ConfigRoute,
-  useSingleFetch?: boolean
+  useSingleFetch?: boolean,
 ): Promise<Array<OpenGraphImageData>> {
   if (!response.body) {
     throw new Error(`Failed to read loader response: response has no body`)
@@ -715,7 +714,7 @@ async function consumeLoaderResponse(
 
     if (!routePayload) {
       throw new Error(
-        `Failed to consume loader response for route "${route.id}": route not found in decoded response`
+        `Failed to consume loader response for route "${route.id}": route not found in decoded response`,
       )
     }
 
@@ -723,7 +722,7 @@ async function consumeLoaderResponse(
 
     if (!data) {
       throw new Error(
-        `Failed to consume loader response for route "${route.id}": route has no data`
+        `Failed to consume loader response for route "${route.id}": route has no data`,
       )
     }
 
