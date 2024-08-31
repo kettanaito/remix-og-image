@@ -65,7 +65,7 @@ interface CacheEntry {
 
 const PLUGIN_NAME = 'remix-og-image-plugin'
 const EXPORT_NAME = 'openGraphImage'
-const CACHE_FILE = 'node_modules/.vite/cache/remix-og-image/cache.json'
+const CACHE_FILE = 'node_modules/.cache/remix-og-image/cache.json'
 
 export function openGraphImagePlugin(options: Options): Plugin {
   if (path.isAbsolute(options.outputDirectory)) {
