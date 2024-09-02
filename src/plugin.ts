@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import type { Writable } from 'node:stream'
 import {
   type Plugin,
   type ResolvedConfig,
@@ -20,6 +21,7 @@ import {
 } from 'babel-dead-code-elimination'
 import { compile } from 'path-to-regexp'
 import { Browser, launch } from 'puppeteer'
+import { performance } from './performance.js'
 import { parse, traverse, generate, t } from './babel.js'
 import {
   OPEN_GRAPH_USER_AGENT_HEADER,
@@ -45,7 +47,7 @@ interface Options {
    */
   format?: 'jpeg' | 'png' | 'webp'
 
-  writeImage?: (args: { image: File }) => Promise<void>
+  writeImage?: (args: { stream: Writable }) => Promise<void>
 
   browser?: {
     executablePath?: string
@@ -59,7 +61,7 @@ interface RemixPluginContext {
 interface GeneratedOpenGraphImage {
   name: string
   path: string
-  content: Uint8Array
+  stream: Writable
 }
 
 interface CacheEntry {
@@ -69,21 +71,22 @@ interface CacheEntry {
 
 const PLUGIN_NAME = 'remix-og-image-plugin'
 const EXPORT_NAME = 'openGraphImage'
-const CACHE_FILE = 'node_modules/.vite/cache/remix-og-image/cache.json'
+const CACHE_FILE = 'node_modules/.cache/remix-og-image/cache.json'
 
 export function openGraphImagePlugin(options: Options): Plugin {
   if (path.isAbsolute(options.outputDirectory)) {
     throw new Error(
-      `Failed to initialize plugin: expected "outputDirectory" to be a relative path but got "${options.outputDirectory}". Please make sure it starts with "./".`
+      `Failed to initialize plugin: expected "outputDirectory" to be a relative path but got "${options.outputDirectory}". Please make sure it starts with "./".`,
     )
   }
 
   const format = options.format || 'jpeg'
 
   const cache = new Cache<string, CacheEntry>()
+  const browserPromise = new DeferredPromise<Browser>()
+  const vitePreviewPromise = new DeferredPromise<ViteDevServer>()
   const viteConfigPromise = new DeferredPromise<ResolvedConfig>()
   const remixContextPromise = new DeferredPromise<RemixPluginContext>()
-  const appUrlPromise = new DeferredPromise<URL>()
   const routesWithImages = new Set<ConfigRoute>()
 
   async function fromRemixApp(...paths: Array<string>): Promise<string> {
@@ -96,7 +99,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
     return path.resolve(
       remixContext.remixConfig.buildDirectory,
       'client',
-      ...paths
+      ...paths,
     )
   }
 
@@ -107,11 +110,13 @@ export function openGraphImagePlugin(options: Options): Plugin {
   async function generateOpenGraphImages(
     route: ConfigRoute,
     browser: Browser,
-    appUrl: URL
+    appUrl: URL,
   ): Promise<Array<GeneratedOpenGraphImage>> {
     if (!route.path) {
       return []
     }
+
+    performance.mark(`generate-image-${route.id}-start`)
 
     // See if the route already has images generated in the cache.
     const cacheEntry = cache.get(route.id)
@@ -147,41 +152,85 @@ export function openGraphImagePlugin(options: Options): Plugin {
       !!remixContext.remixConfig.future.unstable_singleFetch
 
     const createRoutePath = compile(route.path)
+
+    performance.mark(`generate-image-${route.id}-loader-start`)
+
     // Fetch all the params data from the route.
     const loaderData = await getLoaderData(route, appUrl, usingSingleFetch)
+
+    performance.mark(`generate-image-${route.id}-loader-end`)
+    performance.measure(
+      `generate-image-${route.id}:loader`,
+      `generate-image-${route.id}-loader-start`,
+      `generate-image-${route.id}-loader-end`,
+    )
+
     const images: Array<GeneratedOpenGraphImage> = []
 
     await Promise.all(
       loaderData.map(async (data) => {
+        performance.mark(`generate-image-${route.id}-${data.name}-start`)
+
+        performance.mark(
+          `generate-image-${route.id}-${data.name}-new-page-start`,
+        )
+
         const page = await browser.newPage()
+
+        performance.mark(`generate-image-${route.id}-${data.name}-new-page-end`)
+        performance.measure(
+          `generate-image-${route.id}-${data.name}:new-page`,
+          `generate-image-${route.id}-${data.name}-new-page-start`,
+          `generate-image-${route.id}-${data.name}-new-page-end`,
+        )
 
         try {
           const pageUrl = new URL(createRoutePath(data.params), appUrl).href
-          await page.goto(pageUrl, { waitUntil: 'networkidle0' })
 
-          // Set viewport to a 5K device equivalent.
-          // This is more than enough to ensure that the OG image is visible.
-          await page.setViewport({
-            width: 5120,
-            height: 2880,
-            // Use a larger scale factor to get a crisp image.
-            deviceScaleFactor: 2,
-          })
+          performance.mark(
+            `generate-image-${route.id}-${data.name}-pageload-start`,
+          )
+
+          await Promise.all([
+            page.goto(pageUrl, { waitUntil: 'domcontentloaded' }),
+
+            // Set viewport to a 5K device equivalent.
+            // This is more than enough to ensure that the OG image is visible.
+            page.setViewport({
+              width: 5120,
+              height: 2880,
+              // Use a larger scale factor to get a crisp image.
+              deviceScaleFactor: 2,
+            }),
+          ])
+
+          performance.mark(
+            `generate-image-${route.id}-${data.name}-pageload-end`,
+          )
+          performance.measure(
+            `generate-image-${route.id}-${data.name}:pageload`,
+            `generate-image-${route.id}-${data.name}-pageload-start`,
+            `generate-image-${route.id}-${data.name}-pageload-end`,
+          )
 
           const ogImageBoundingBox = await page
             .$(options.elementSelector)
-            .then((element) => element?.boundingBox())
+            .then(async (element) => {
+              if (!element) {
+                return
+              }
+
+              await element.scrollIntoView()
+              return element.boundingBox()
+            })
 
           if (!ogImageBoundingBox) {
             return []
           }
 
-          await page.evaluate((selector) => {
-            const element = document.querySelector(selector)
-            if (element) {
-              element.scrollIntoView(true)
-            }
-          }, options.elementSelector)
+          performance.mark(
+            `generate-image-${route.id}-${data.name}-screenshot-start`,
+          )
 
           const imageBuffer = await page.screenshot({
             type: format,
@@ -191,13 +240,23 @@ export function openGraphImagePlugin(options: Options): Plugin {
             // to capture only the image and ignore any otherwise
             // present UI, like the layout.
             clip: ogImageBoundingBox,
+            optimizeForSpeed: true,
           })
 
-          let optimizeImageBuffer = sharp(imageBuffer)
+          performance.mark(
+            `generate-image-${route.id}-${data.name}-screenshot-end`,
+          )
+          performance.measure(
+            `generate-image-${route.id}-${data.name}:screenshot`,
+            `generate-image-${route.id}-${data.name}-screenshot-start`,
+            `generate-image-${route.id}-${data.name}-screenshot-end`,
+          )
+
+          let imageStream = sharp(imageBuffer)
 
           switch (format) {
             case 'jpeg': {
-              optimizeImageBuffer = optimizeImageBuffer.jpeg({
+              imageStream = imageStream.jpeg({
                 quality: 100,
                 progressive: true,
               })
@@ -205,7 +264,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
             }
 
             case 'png': {
-              optimizeImageBuffer = optimizeImageBuffer.png({
+              imageStream = imageStream.png({
                 compressionLevel: 9,
                 adaptiveFiltering: true,
               })
@@ -213,7 +272,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
             }
 
             case 'webp': {
-              optimizeImageBuffer = optimizeImageBuffer.webp({
+              imageStream = imageStream.webp({
                 lossless: true,
                 smartSubsample: true,
                 quality: 100,
@@ -223,18 +282,31 @@ export function openGraphImagePlugin(options: Options): Plugin {
             }
           }
 
-          const optimizedImageBuffer = await optimizeImageBuffer.toBuffer()
           const imageName = `${data.name}.${format}`
 
           images.push({
             name: imageName,
             path: await fromOutputDirectory(imageName),
-            content: optimizedImageBuffer,
+            stream: imageStream,
           })
         } finally {
           await page.close({ runBeforeUnload: false })
+
+          performance.mark(`generate-image-${route.id}-${data.name}-end`)
+          performance.measure(
+            `generate-image-${route.id}-${data.name}`,
+            `generate-image-${route.id}-${data.name}-start`,
+            `generate-image-${route.id}-${data.name}-end`,
+          )
         }
-      })
+      }),
+    )
+
+    performance.mark(`generate-image-${route.id}-end`)
+    performance.measure(
+      `generate-image-${route.id}`,
+      `generate-image-${route.id}-start`,
+      `generate-image-${route.id}-end`,
     )
 
     cache.set(route.id, {
@@ -248,7 +320,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
   async function writeImage(image: GeneratedOpenGraphImage) {
     if (options.writeImage) {
       return await options.writeImage({
-        image: new File([image.content], image.path),
+        stream: image.stream,
       })
     }
 
@@ -256,10 +328,11 @@ export function openGraphImagePlugin(options: Options): Plugin {
     if (!fs.existsSync(directoryName)) {
       await fs.promises.mkdir(directoryName, { recursive: true })
     }
-    await fs.promises.writeFile(image.path, image.content)
-
+    await fs.promises.writeFile(image.path, image.stream)
     console.log(`Generated OG image at "${image.path}".`)
   }
+
+  performance.mark('plugin-start')
 
   return {
     name: PLUGIN_NAME,
@@ -287,12 +360,12 @@ export function openGraphImagePlugin(options: Options): Plugin {
       }
 
       const routePath = normalizePath(
-        path.relative(remixContext.remixConfig.appDirectory, id)
+        path.relative(remixContext.remixConfig.appDirectory, id),
       )
       const route = Object.values(remixContext.remixConfig.routes).find(
         (route) => {
           return normalizePath(route.file) === routePath
-        }
+        },
       )
 
       // Ignore non-route modules.
@@ -335,6 +408,14 @@ export function openGraphImagePlugin(options: Options): Plugin {
         return generate(ast, { sourceMaps: true, sourceFileName: id }, code)
       }
 
+      // Spawn the browser immediately once we detect an OG image route.
+      if (routesWithImages.size === 0) {
+        browserPromise.resolve(getBrowserInstance())
+        vitePreviewPromise.resolve(
+          runVitePreviewServer(await viteConfigPromise),
+        )
+      }
+
       routesWithImages.add(route)
     },
 
@@ -359,35 +440,39 @@ export function openGraphImagePlugin(options: Options): Plugin {
         ) {
           console.log(
             'Generating OG images for %d route(s)...',
-            routesWithImages.size
+            routesWithImages.size,
           )
 
           const [browser, server] = await Promise.all([
-            getBrowserInstance(),
+            browserPromise,
 
             /**
              * @fixme Vite preview server someties throws:
              * "Error: The server is being restarted or closed. Request is outdated."
              * when trying to navigate to it. It requires a refresh to work.
              */
-            runVitePreviewServer(viteConfig),
+            vitePreviewPromise,
           ])
           const appUrl = new URL(server.resolvedUrls?.local?.[0]!)
+          const pendingScreenshots: Array<Promise<unknown>> = []
 
-          const pendingScreenshots = Array.from(routesWithImages).map(
-            (route) => {
-              return generateOpenGraphImages(route, browser, appUrl)
-                .then((images) => images.map(writeImage))
+          for (const route of routesWithImages) {
+            pendingScreenshots.push(
+              generateOpenGraphImages(route, browser, appUrl)
+                .then((images) => Promise.all(images.map(writeImage)))
                 .catch((error) => {
                   this.error(
-                    `Failed to generate OG image for route "${route.id}": ${error}`
+                    `Failed to generate OG image for route "${route.id}": ${error}`,
                   )
-                })
-            }
-          )
+                }),
+            )
+          }
 
           await Promise.allSettled(pendingScreenshots)
           await Promise.all([server.close(), browser.close(), cache.close()])
+
+          performance.mark('plugin-end')
+          performance.measure('plugin', 'plugin-start', 'plugin-end')
         }
       },
     },
@@ -397,11 +482,13 @@ export function openGraphImagePlugin(options: Options): Plugin {
 let browser: Browser | undefined
 
 async function getBrowserInstance(
-  options: Options['browser'] = {}
+  options: Options['browser'] = {},
 ): Promise<Browser> {
   if (browser) {
     return browser
   }
+
+  performance.mark('browser-launch-start')
 
   browser = await launch({
     headless: true,
@@ -414,11 +501,18 @@ async function getBrowserInstance(
     executablePath: options.executablePath,
   })
 
+  performance.mark('browser-launch-end')
+  performance.measure(
+    'browser-launch',
+    'browser-launch-start',
+    'browser-launch-end',
+  )
+
   return browser
 }
 
 async function runVitePreviewServer(
-  viteConfig: ResolvedConfig
+  viteConfig: ResolvedConfig,
 ): Promise<ViteDevServer> {
   /**
    * @note Force `NODE_ENV` to be "development" for the preview server.
@@ -429,16 +523,14 @@ async function runVitePreviewServer(
    */
   process.env.NODE_ENV = 'development'
 
+  performance.mark('vite-preview-resolve-config-start')
+
   // Use the `resolveConfig` function explicitly because it
   // allows passing options like `command` and `mode` to Vite.
   const previewViteConfig = await resolveConfig(
     {
       root: viteConfig.root,
       configFile: viteConfig.configFile,
-      /**
-       * @fixme Despite the log levels, this server stills prints
-       * "Using vars defined in XYZ" when run. Is there a way to turn that off?
-       */
       logLevel: 'error',
     },
     'serve',
@@ -446,10 +538,27 @@ async function runVitePreviewServer(
     // It will skip all the built-in development-oriented plugins in Vite.
     'production',
     'development',
-    false
+    false,
   )
 
+  performance.mark('vite-preview-resolve-config-end')
+  performance.measure(
+    'vite-preview-resolve-config',
+    'vite-preview-resolve-config-start',
+    'vite-preview-resolve-config-end',
+  )
+
+  performance.mark('vite-preview-server-start')
+
   const server = await createServer(previewViteConfig.inlineConfig)
+
+  performance.mark('vite-preview-server-end')
+  performance.measure(
+    'vite-preview-server',
+    'vite-preview-server-start',
+    'vite-preview-server-end',
+  )
+
   return server.listen()
 }
 
@@ -489,14 +598,14 @@ class Cache<K, V> extends Map<K, V> {
     if (!fs.existsSync(baseDirectory)) {
       await fs.promises.mkdir(baseDirectory, { recursive: true })
     }
-    await fs.promises.writeFile(this.cachePath, cacheContent, 'utf8')
+    return fs.promises.writeFile(this.cachePath, cacheContent, 'utf8')
   }
 }
 
 async function getLoaderData(
   route: ConfigRoute,
   appUrl: URL,
-  useSingleFetch?: boolean
+  useSingleFetch?: boolean,
 ) {
   const url = createResourceRouteUrl(route, appUrl, useSingleFetch)
   const response = await fetch(url, {
@@ -505,30 +614,30 @@ async function getLoaderData(
     },
   }).catch((error) => {
     throw new Error(
-      `Failed to fetch Open Graph image data for route "${url.href}": ${error}`
+      `Failed to fetch Open Graph image data for route "${url.href}": ${error}`,
     )
   })
 
   if (!response.ok) {
     throw new Error(
-      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with ${response.status}`
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with ${response.status}`,
     )
   }
 
   if (!response.body) {
     throw new Error(
-      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with no body. Did you forget to throw \`json(openGraphImage())\` in your loader?`
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with no body. Did you forget to throw \`json(openGraphImage())\` in your loader?`,
     )
   }
 
   const responseContentType = response.headers.get('content-type') || ''
   if (
     !responseContentType.includes(
-      useSingleFetch ? 'text/x-turbo' : 'application/json'
+      useSingleFetch ? 'text/x-turbo' : 'application/json',
     )
   ) {
     throw new Error(
-      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with invalid content type ("${responseContentType}"). Did you forget to throw \`json(openGraphImage())\` in your loader?`
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with invalid content type ("${responseContentType}"). Did you forget to throw \`json(openGraphImage())\` in your loader?`,
     )
   }
 
@@ -537,7 +646,7 @@ async function getLoaderData(
 
   if (!Array.isArray(data)) {
     throw new Error(
-      `Failed to fetch Open Graph image data for route "${url.href}": loader responded with invalid response. Did you forget to throw \`json(openGraphImage())\` in your loader?`
+      `Failed to fetch Open Graph image data for route "${url.href}": loader responded with invalid response. Did you forget to throw \`json(openGraphImage())\` in your loader?`,
     )
   }
 
@@ -551,11 +660,11 @@ async function getLoaderData(
 function createResourceRouteUrl(
   route: ConfigRoute,
   appUrl: URL,
-  useSingleFetch?: boolean
+  useSingleFetch?: boolean,
 ) {
   if (!route.path) {
     throw new Error(
-      `Failed to create resource route URL for route "${route.id}": route has no path`
+      `Failed to create resource route URL for route "${route.id}": route has no path`,
     )
   }
 
@@ -563,6 +672,11 @@ function createResourceRouteUrl(
 
   if (useSingleFetch) {
     url.pathname += '.data'
+    /**
+     * @note The `_routes` parameter is meant for fetching multiple loader
+     * data that match the route. It won't work if you have multiple different,
+     * independent routes, so we still need to fetch the loader data in multiple requests.
+     */
     url.searchParams.set('_route', route.id)
   } else {
     // Set the "_data" search parameter so the route can be queried
@@ -573,39 +687,52 @@ function createResourceRouteUrl(
   return url
 }
 
+async function decodeTurboStreamResponse(
+  response: Response,
+): Promise<Record<string, { data: unknown }>> {
+  if (!response.body) {
+    throw new Error(
+      `Failed to decode turbo-stream response: response has no body`,
+    )
+  }
+
+  const bodyStream = await decode(response.body)
+  await bodyStream.done
+
+  const decodedBody = bodyStream.value as Record<string, { data: unknown }>
+  if (!decodedBody) {
+    throw new Error(`Failed to decode turbo-stream response`)
+  }
+
+  return decodedBody
+}
+
 async function consumeLoaderResponse(
   response: Response,
   route: ConfigRoute,
-  useSingleFetch?: boolean
+  useSingleFetch?: boolean,
 ): Promise<Array<OpenGraphImageData>> {
   if (!response.body) {
     throw new Error(`Failed to read loader response: response has no body`)
   }
 
-  // If the app is using Single fetch, decode the loader
+  // If the app is using Single Fetch, decode the loader
   // payload properly using the `turbo-stream` package.
   if (useSingleFetch) {
-    const bodyStream = await decode(response.body)
-    await bodyStream.done
-
-    const decodedBody = bodyStream.value as Record<string, unknown>
-    if (!decodedBody) {
-      throw new Error(
-        `Failed to consume loader response for route "${route.id}`
-      )
-    }
-
+    const decodedBody = await decodeTurboStreamResponse(response)
     const routePayload = decodedBody[route.id]
+
     if (!routePayload) {
       throw new Error(
-        `Failed to consume loader response for route "${route.id}": route not found in decoded response`
+        `Failed to consume loader response for route "${route.id}": route not found in decoded response`,
       )
     }
 
     const data = (routePayload as any).data as Array<OpenGraphImageData>
+
     if (!data) {
       throw new Error(
-        `Failed to consume loader response for route "${route.id}": route has no data`
+        `Failed to consume loader response for route "${route.id}": route has no data`,
       )
     }
 
