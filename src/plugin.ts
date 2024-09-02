@@ -47,7 +47,7 @@ interface Options {
    */
   format?: 'jpeg' | 'png' | 'webp'
 
-  writeImage?: (args: { stream: Writable }) => Promise<void>
+  writeImage?: (image: { stream: Writable }) => Promise<void>
 
   browser?: {
     executablePath?: string

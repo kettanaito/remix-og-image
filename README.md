@@ -254,7 +254,7 @@ You can opt-out from writing generated images to disk by providing the `writeIma
 openGraphImagePlugin({
   // ...options.
 
-  async writeImage({ image }) {
+  async writeImage(image) {
     await uploadToCdn(image.stream())
   },
 })
