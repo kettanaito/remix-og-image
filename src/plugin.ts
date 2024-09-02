@@ -36,8 +36,6 @@ const perfObserver = new PerformanceObserver((items) => {
 
 perfObserver.observe({ entryTypes: ['measure'], buffered: true })
 
-console.log('PERFORMANCE ACTIVATED!')
-
 interface Options {
   /**
    * Selector for the element to capture as the Open Graph image.
@@ -667,6 +665,11 @@ function createResourceRouteUrl(
 
   if (useSingleFetch) {
     url.pathname += '.data'
+    /**
+     * @note The `_routes` parameter is meant for fetching multiple loader
+     * data that match the route. It won't work if you have multiple different,
+     * independent routes, so we still need to fetch the loader data in multiple requests.
+     */
     url.searchParams.set('_route', route.id)
   } else {
     // Set the "_data" search parameter so the route can be queried
@@ -706,7 +709,7 @@ async function consumeLoaderResponse(
     throw new Error(`Failed to read loader response: response has no body`)
   }
 
-  // If the app is using Single fetch, decode the loader
+  // If the app is using Single Fetch, decode the loader
   // payload properly using the `turbo-stream` package.
   if (useSingleFetch) {
     const decodedBody = await decodeTurboStreamResponse(response)
