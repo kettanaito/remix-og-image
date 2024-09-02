@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { Writable } from 'node:stream'
+import { PassThrough, Readable } from 'node:stream'
+import { finished } from 'node:stream/promises'
 import {
   type Plugin,
   type ResolvedConfig,
@@ -47,7 +48,7 @@ interface Options {
    */
   format?: 'jpeg' | 'png' | 'webp'
 
-  writeImage?: (image: { stream: Writable }) => Promise<void>
+  writeImage?: (image: { stream: Readable }) => Promise<void>
 
   browser?: {
     executablePath?: string
@@ -73,17 +74,22 @@ interface RemixPluginContext {
 interface GeneratedOpenGraphImage {
   name: string
   path: string
-  stream: Writable
+  stream: Readable
 }
 
 interface CacheEntry {
   routeLastModifiedAt: number
-  imagePaths: Array<string>
+  images: Array<{
+    name: string
+    outputPath: string
+  }>
 }
 
 const PLUGIN_NAME = 'remix-og-image-plugin'
 const EXPORT_NAME = 'openGraphImage'
-const CACHE_FILE = 'node_modules/.cache/remix-og-image/cache.json'
+const CACHE_DIR = path.resolve('node_modules/.cache/remix-og-image')
+const CACHE_MANIFEST = path.resolve(CACHE_DIR, 'manifest.json')
+const CACHE_RESULTS_DIR = path.resolve(CACHE_DIR, 'output')
 
 export function openGraphImagePlugin(options: Options): Plugin {
   if (path.isAbsolute(options.outputDirectory)) {
@@ -143,18 +149,32 @@ export function openGraphImagePlugin(options: Options): Plugin {
     if (cacheEntry) {
       const hasRouteChanged =
         routeLastModifiedAt > cacheEntry.routeLastModifiedAt
-      const allImagesExist = () => {
-        return (
-          cacheEntry.imagePaths.length > 0 &&
-          cacheEntry.imagePaths.every((imagePath) => {
-            return fs.existsSync(imagePath)
-          })
-        )
-      }
 
-      // Skip generating the images only if the route module hasn't changed
-      // and all the previously generated images still exist.
-      if (!hasRouteChanged && allImagesExist()) {
+      // If the route hasn't changed, and there are cached generated results,
+      // copy the generated images without spawning the browser, screenshoting, etc.
+      if (!hasRouteChanged) {
+        await Promise.all(
+          cacheEntry.images.map((cachedImage) => {
+            const cachedImagePath = path.resolve(
+              CACHE_RESULTS_DIR,
+              cachedImage.name,
+            )
+
+            if (fs.existsSync(cachedImagePath)) {
+              return writeImage({
+                name: cachedImage.name,
+                path: cachedImage.outputPath,
+                stream: fs.createReadStream(cachedImagePath),
+              })
+            }
+          }),
+        )
+
+        /**
+         * @fixme If copying the cached images fails for any reason,
+         * the plugin should continue ONLY with the sub-list of images
+         * that excludes those that were successfully copied from the cache.
+         */
         return []
       }
     }
@@ -334,7 +354,10 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
     cache.set(route.id, {
       routeLastModifiedAt,
-      imagePaths: images.map((image) => image.path),
+      images: images.map((image) => ({
+        name: image.name,
+        outputPath: image.path,
+      })),
     })
 
     return images
@@ -348,10 +371,24 @@ export function openGraphImagePlugin(options: Options): Plugin {
     }
 
     const directoryName = path.dirname(image.path)
-    if (!fs.existsSync(directoryName)) {
-      await fs.promises.mkdir(directoryName, { recursive: true })
-    }
-    await fs.promises.writeFile(image.path, image.stream)
+    await Promise.all([
+      ensureDirectory(CACHE_RESULTS_DIR),
+      ensureDirectory(directoryName),
+    ])
+    await ensureDirectory(directoryName)
+
+    const passthrough = new PassThrough()
+    const destWriteStream = fs.createWriteStream(image.path)
+    const cacheWriteStream = fs.createWriteStream(
+      path.resolve(CACHE_RESULTS_DIR, image.name),
+    )
+
+    image.stream.pipe(passthrough)
+    passthrough.pipe(destWriteStream)
+    passthrough.pipe(cacheWriteStream)
+
+    await Promise.all([finished(destWriteStream), finished(cacheWriteStream)])
+
     console.log(`Generated OG image at "${image.path}".`)
   }
 
@@ -364,7 +401,7 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
     async buildStart() {
       const viteConfig = await viteConfigPromise
-      await cache.open(path.resolve(viteConfig.root, CACHE_FILE))
+      await cache.open(path.resolve(viteConfig.root, CACHE_MANIFEST))
     },
 
     configResolved(config) {
@@ -765,4 +802,11 @@ async function consumeLoaderResponse(
   // If the app is using the legacy loader response,
   // read it as JSON (it's not encoded).
   return response.json()
+}
+
+async function ensureDirectory(directory: string): Promise<void> {
+  if (fs.existsSync(directory)) {
+    return
+  }
+  await fs.promises.mkdir(directory, { recursive: true })
 }
