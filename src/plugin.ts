@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Writable } from 'node:stream'
-import { performance, PerformanceObserver } from 'node:perf_hooks'
 import {
   type Plugin,
   type ResolvedConfig,
@@ -22,19 +21,12 @@ import {
 } from 'babel-dead-code-elimination'
 import { compile } from 'path-to-regexp'
 import { Browser, launch } from 'puppeteer'
+import { performance } from './performance.js'
 import { parse, traverse, generate, t } from './babel.js'
 import {
   OPEN_GRAPH_USER_AGENT_HEADER,
   type OpenGraphImageData,
 } from './index.js'
-
-const perfObserver = new PerformanceObserver((items) => {
-  items.getEntries().forEach((entry) => {
-    console.log(entry)
-  })
-})
-
-perfObserver.observe({ entryTypes: ['measure'], buffered: true })
 
 interface Options {
   /**
