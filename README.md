@@ -135,6 +135,9 @@ export function meta() {
   - `outputDirectory`, `string`, a _relative_ path to the directory to write the image. Relative to the client build assets directory (e.g. `/build/client`).
   - `format`, `"jpeg" | "png" | "webp"` (_optional_; default, `"jpeg"`), the format of the generated image.
   - `writeImage`, `Function`, (_optional_), a custom function to control writing image.
+  - `browser`, `Object`, Puppeteer browser instance options.
+    - `executablePath`, `string`, (_optional_), a custom path to the Chromium executable.
+    - `mediaFeatures`, `Record<string, string>` (_optional_), custom media features to apply to each created page (see [`page.emulateMediaFeatures()`](https://pptr.dev/api/puppeteer.page.emulatemediafeatures)). Useful to force media features like `prefers-color-scheme`.
 
 ```js
 import { openGraphImagePlugin } from 'remix-og-image/plugin'

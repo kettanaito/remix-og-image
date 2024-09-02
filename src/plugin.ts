@@ -48,6 +48,22 @@ interface Options {
   format?: 'jpeg' | 'png' | 'webp'
 
   writeImage?: (args: { stream: Writable }) => Promise<void>
+
+  browser?: {
+    executablePath?: string
+
+    /**
+     * Custom media features.
+     * Use this to force media features like `prefers-color-scheme`
+     * or `prefers-reduced-motion`.
+     *
+     * @example
+     * mediaFeatures: {
+     *   'prefers-color-scheme': 'dark',
+     * }
+     */
+    mediaFeatures?: Record<string, string>
+  }
 }
 
 interface RemixPluginContext {
@@ -172,6 +188,17 @@ export function openGraphImagePlugin(options: Options): Plugin {
         )
 
         const page = await browser.newPage()
+
+        // Support custom user preferences (media features),
+        // such as forcing a light/dark mode for the app.
+        const mediaFeatures = options.browser?.mediaFeatures
+        if (mediaFeatures) {
+          await page.emulateMediaFeatures(
+            Object.entries(mediaFeatures).map(([name, value]) => {
+              return { name, value }
+            }),
+          )
+        }
 
         performance.mark(`generate-image-${route.id}-${data.name}-new-page-end`)
         performance.measure(
@@ -477,14 +504,25 @@ export function openGraphImagePlugin(options: Options): Plugin {
 
 let browser: Browser | undefined
 
-async function getBrowserInstance(): Promise<Browser> {
+async function getBrowserInstance(
+  options: Options['browser'] = {},
+): Promise<Browser> {
   if (browser) {
     return browser
   }
 
   performance.mark('browser-launch-start')
 
-  browser = await launch({ headless: true })
+  browser = await launch({
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+    ],
+    executablePath: options.executablePath,
+  })
 
   performance.mark('browser-launch-end')
   performance.measure(
