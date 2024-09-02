@@ -51,6 +51,18 @@ interface Options {
 
   browser?: {
     executablePath?: string
+
+    /**
+     * Custom media features.
+     * Use this to force media features like `prefers-color-scheme`
+     * or `prefers-reduced-motion`.
+     *
+     * @example
+     * mediaFeatures: {
+     *   'prefers-color-scheme': 'dark',
+     * }
+     */
+    mediaFeatures?: Record<string, string>
   }
 }
 
@@ -176,6 +188,17 @@ export function openGraphImagePlugin(options: Options): Plugin {
         )
 
         const page = await browser.newPage()
+
+        // Support custom user preferences (media features),
+        // such as forcing a light/dark mode for the app.
+        const mediaFeatures = options.browser?.mediaFeatures
+        if (mediaFeatures) {
+          await page.emulateMediaFeatures(
+            Object.entries(mediaFeatures).map(([name, value]) => {
+              return { name, value }
+            }),
+          )
+        }
 
         performance.mark(`generate-image-${route.id}-${data.name}-new-page-end`)
         performance.measure(
