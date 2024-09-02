@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { PassThrough, Readable } from 'node:stream'
+import { finished } from 'node:stream/promises'
 import {
   type Plugin,
   type ResolvedConfig,
@@ -386,12 +387,8 @@ export function openGraphImagePlugin(options: Options): Plugin {
     passthrough.pipe(destWriteStream)
     passthrough.pipe(cacheWriteStream)
 
-    const writePromise = new DeferredPromise<void>()
-    passthrough
-      .on('finish', () => writePromise.resolve())
-      .on('error', (error) => writePromise.reject(error))
+    await Promise.all([finished(destWriteStream), finished(cacheWriteStream)])
 
-    await writePromise
     console.log(`Generated OG image at "${image.path}".`)
   }
 
