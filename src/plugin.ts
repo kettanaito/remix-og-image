@@ -91,7 +91,7 @@ const CACHE_DIR = path.resolve('node_modules/.cache/remix-og-image')
 const CACHE_MANIFEST = path.resolve(CACHE_DIR, 'manifest.json')
 const CACHE_RESULTS_DIR = path.resolve(CACHE_DIR, 'output')
 
-export function openGraphImagePlugin(options: Options): Plugin {
+export function openGraphImage(options: Options): Plugin {
   if (path.isAbsolute(options.outputDirectory)) {
     throw new Error(
       `Failed to initialize plugin: expected "outputDirectory" to be a relative path but got "${options.outputDirectory}". Please make sure it starts with "./".`,

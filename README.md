@@ -36,12 +36,12 @@ npm i remix-og-image
 
 ```js
 // vite.config.js
-import { openGraphImagePlugin } from 'remix-og-image/plugin'
+import { openGraphImage } from 'remix-og-image/plugin'
 
 export default defineConfig({
   plugins: [
     // ...the rest of your plugins.
-    openGraphImagePlugin({
+    openGraphImage({
       // Specify a selector for the DOM element on the page
       // that the plugin should screenshot.
       elementSelector: '#og-image',
@@ -128,7 +128,7 @@ export function meta() {
 
 ## API
 
-### `openGraphImagePlugin(options)`
+### `openGraphImage(options)`
 
 - `options`
   - `elementSelector`, `string`, a selector for the DOM element representing the OG image (i.e. your React component). The plugin takes the screenshot of the given element, and not the entire page, so you can render the OG image preview in the same layout as the rest of your app.
@@ -140,7 +140,7 @@ export function meta() {
     - `mediaFeatures`, `Record<string, string>` (_optional_), custom media features to apply to each created page (see [`page.emulateMediaFeatures()`](https://pptr.dev/api/puppeteer.page.emulatemediafeatures)). Useful to force media features like `prefers-color-scheme`.
 
 ```js
-import { openGraphImagePlugin } from 'remix-og-image/plugin'
+import { openGraphImage } from 'remix-og-image/plugin'
 ```
 
 ### `isOpenGraphImageRequest(request)`
@@ -251,7 +251,7 @@ export default function Template() {
 You can opt-out from writing generated images to disk by providing the `writeImage` option to the plugin:
 
 ```js
-openGraphImagePlugin({
+openGraphImage({
   // ...options.
 
   async writeImage(image) {
