@@ -409,7 +409,15 @@ export function openGraphImage(options: Options): Plugin {
       /**
        * @todo Would be nice for Remix to expose this internal key.
        */
-      remixContextPromise.resolve(Reflect.get(config, '__remixPluginContext'))
+      const remixPluginContext = Reflect.get(config, '__remixPluginContext')
+
+      if (typeof remixPluginContext === 'undefined') {
+        throw new Error(
+          `Failed to apply "remix-og-image" plugin: no Remix context found. Did you forget to use the Remix plugin in your Vite configuration?`,
+        )
+      }
+
+      remixContextPromise.resolve(remixPluginContext)
     },
 
     async transform(code, id, options = {}) {
