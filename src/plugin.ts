@@ -499,8 +499,11 @@ export function openGraphImage(options: Options): Plugin {
           routesWithImages.size > 0
         ) {
           console.log(
-            'Generating OG images for %d route(s)...',
-            routesWithImages.size,
+            `Generating OG images for ${routesWithImages.size} route(s):
+${Array.from(routesWithImages)
+  .map((route) => `  - ${route.id}`)
+  .join('\n')}
+            `,
           )
 
           const [browser, server] = await Promise.all([
@@ -521,15 +524,30 @@ export function openGraphImage(options: Options): Plugin {
               generateOpenGraphImages(route, browser, appUrl)
                 .then((images) => Promise.all(images.map(writeImage)))
                 .catch((error) => {
-                  this.error(
-                    `Failed to generate OG image for route "${route.id}": ${error}`,
+                  throw new Error(
+                    `Failed to generate OG image for route "${route.id}".`,
+                    { cause: error },
                   )
                 }),
             )
           }
 
-          await Promise.allSettled(pendingScreenshots)
+          const results = await Promise.allSettled(pendingScreenshots)
           await Promise.all([server.close(), browser.close(), cache.close()])
+
+          let hasErrors = false
+          results.forEach((result) => {
+            if (result.status === 'rejected') {
+              hasErrors = true
+              console.error(result.reason)
+            }
+          })
+
+          if (hasErrors) {
+            throw new Error(
+              'Failed to generate OG images. Please see the errors above.',
+            )
+          }
 
           performance.mark('plugin-end')
           performance.measure('plugin', 'plugin-start', 'plugin-end')
@@ -691,11 +709,11 @@ async function getLoaderData(
   }
 
   const responseContentType = response.headers.get('content-type') || ''
-  if (
-    !responseContentType.includes(
-      useSingleFetch ? 'text/x-turbo' : 'application/json',
-    )
-  ) {
+  const expectedContentTypes = useSingleFetch
+    ? ['text/x-turbo', 'text/x-script']
+    : ['application/json']
+
+  if (!expectedContentTypes.includes(responseContentType)) {
     throw new Error(
       `Failed to fetch Open Graph image data for route "${url.href}": loader responsed with invalid content type ("${responseContentType}"). Did you forget to throw \`json(openGraphImage())\` in your loader?`,
     )
