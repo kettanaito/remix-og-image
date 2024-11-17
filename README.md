@@ -60,12 +60,12 @@ This library needs a designated Remix route responsible for rendering OG images.
 ```jsx
 // app/routes/og.jsx
 import { json } from '@remix-run/react'
-import { isOpenGraphImageRequest } from 'remix-og-image'
+import { isOpenGraphImageRequest, type OpenGraphImageData } from 'remix-og-image'
 
 // 👉 1. Export the special `openGraphImage` function.
 // This function returns an array of OG image generation entries.
 // In the example below, it generates only one image called "og-image.jpeg"
-export function openGraphImage() {
+export function openGraphImage(): Array<OpenGraphImageData> {
   return [
     // The `name` property controls the generated
     // image's file name.
@@ -79,12 +79,9 @@ export function loader({ request }}) {
   // from the plugin. Use the `isOpenGraphImageRequest` utility from the library.
   if (isOpenGraphImageRequest(request)) {
     /**
-     * @note Throw the OG image response instead of returning it.
-     * This way, you don't have to deal with the `loader` function
-     * returning a union of OG image data and the actual data
-     * returned to the UI component.
+     * @note In Remix before single fetch, you have to throw this response.
      */
-    throw json(openGraphImage())
+    return Response.json(openGraphImage())
   }
 
   // Compute and return any data needed for the OG image.
@@ -110,7 +107,7 @@ export default function Template() {
 
 You can then reference the generated OG images in the `meta` export of your page:
 
-```jsx
+```ts
 // app/routes/page.jsx
 export function meta() {
   return [
@@ -160,14 +157,16 @@ One of the selling points of generating OG images is including _dynamic data_ in
 
 This plugin supports generating multiple OG images from a single route by returning an array of data alternations from the `openGraphImage` function:
 
-```jsx
+```tsx
+import type { OpenGraphImageData } from 'remix-og-image'
+
 // app/routes/post.$slug.og.jsx
 export function openGraphImage() {
   // Return a dynamic number of OG image entries
   // based on your data. The plugin will automatically
   // provide the "params" to this route when
   // visiting each alternation of this page in the browser.
-  return allPosts.map((post) => {
+  return allPosts.map<OpenGraphImageData>((post) => {
     return {
       name: post.slug,
       params: { slug: post.slug },
@@ -177,7 +176,7 @@ export function openGraphImage() {
 
 export async function loader({ request, params }) {
   if (isOpenGraphImageRequest(request)) {
-    throw json(openGraphImage())
+    return Response.jsopn(openGraphImage())
   }
 
   const { slug } = params
@@ -187,7 +186,7 @@ export async function loader({ request, params }) {
 }
 
 export default function Template() {
-  const { post } = useLoaderData()
+  const { post } = useLoaderData<typeof loader>()
 
   return (
     <div
