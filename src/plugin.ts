@@ -181,7 +181,8 @@ export function openGraphImage(options: Options): Plugin {
 
     const remixContext = await remixContextPromise
     const usingSingleFetch =
-      !!remixContext.remixConfig.future.unstable_singleFetch
+      !!Reflect.get(remixContext.remixConfig.future, 'unstable_singleFetch') ||
+      !!Reflect.get(remixContext.remixConfig.future, 'v3_singleFetch')
 
     const createRoutePath = compile(route.path)
 

@@ -45,7 +45,7 @@
     "@babel/traverse": "^7.25.3",
     "@babel/types": "^7.25.2",
     "@open-draft/deferred-promise": "^2.2.0",
-    "@remix-run/dev": "^2.11.2",
+    "@remix-run/dev": "^2.14.0",
     "@types/babel__core": "^7.20.5",
     "@types/babel__generator": "^7.6.8",
     "@types/babel__traverse": "^7.20.6",
