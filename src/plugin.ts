@@ -14,7 +14,7 @@ import { parse as esModuleLexer } from 'es-module-lexer'
 import { decode } from 'turbo-stream'
 import sharp from 'sharp'
 import type { VitePluginConfig as RemixVitePluginConfig } from '@remix-run/dev'
-import type { ConfigRoute } from '@remix-run/dev/dist/config/routes.js'
+import type { RouteConfigEntry } from '@remix-run/dev/dist/config/routes.js'
 import { DeferredPromise } from '@open-draft/deferred-promise'
 import {
   deadCodeElimination,
@@ -105,7 +105,7 @@ export function openGraphImage(options: Options): Plugin {
   const vitePreviewPromise = new DeferredPromise<ViteDevServer>()
   const viteConfigPromise = new DeferredPromise<ResolvedConfig>()
   const remixContextPromise = new DeferredPromise<RemixPluginContext>()
-  const routesWithImages = new Set<ConfigRoute>()
+  const routesWithImages = new Set<RouteConfigEntry>()
 
   async function fromRemixApp(...paths: Array<string>): Promise<string> {
     const remixContext = await remixContextPromise
@@ -126,7 +126,7 @@ export function openGraphImage(options: Options): Plugin {
   }
 
   async function generateOpenGraphImages(
-    route: ConfigRoute,
+    route: RouteConfigEntry,
     browser: Browser,
     appUrl: URL,
   ): Promise<Array<GeneratedOpenGraphImage>> {
@@ -134,10 +134,10 @@ export function openGraphImage(options: Options): Plugin {
       return []
     }
 
-    performance.mark(`generate-image-${route.id}-start`)
+    performance.mark(`generate-image-${route.file}-start`)
 
     // See if the route already has images generated in the cache.
-    const cacheEntry = cache.get(route.id)
+    const cacheEntry = cache.get(route.file)
     const routeStats = await fs.promises
       .stat(await fromRemixApp(route.file))
       .catch((error) => {
@@ -353,7 +353,7 @@ export function openGraphImage(options: Options): Plugin {
       `generate-image-${route.id}-end`,
     )
 
-    cache.set(route.id, {
+    cache.set(route.file, {
       routeLastModifiedAt,
       images: images.map((image) => ({
         name: image.name,
@@ -690,7 +690,7 @@ class Cache<K, V> extends Map<K, V> {
 }
 
 async function getLoaderData(
-  route: ConfigRoute,
+  route: RouteConfigEntry,
   appUrl: URL,
   useSingleFetch?: boolean,
 ) {
@@ -745,7 +745,7 @@ async function getLoaderData(
  * as a resource route. Respects Single fetch mode.
  */
 function createResourceRouteUrl(
-  route: ConfigRoute,
+  route: RouteConfigEntry,
   appUrl: URL,
   useSingleFetch?: boolean,
 ) {
@@ -764,11 +764,11 @@ function createResourceRouteUrl(
      * data that match the route. It won't work if you have multiple different,
      * independent routes, so we still need to fetch the loader data in multiple requests.
      */
-    url.searchParams.set('_route', route.id)
+    url.searchParams.set('_route', route.id!)
   } else {
     // Set the "_data" search parameter so the route can be queried
     // like a resource route although it renders UI.
-    url.searchParams.set('_data', route.id)
+    url.searchParams.set('_data', route.id!)
   }
 
   return url
@@ -796,7 +796,7 @@ async function decodeTurboStreamResponse(
 
 async function consumeLoaderResponse(
   response: Response,
-  route: ConfigRoute,
+  route: RouteConfigEntry,
   useSingleFetch?: boolean,
 ): Promise<Array<OpenGraphImageData>> {
   if (!response.body) {
@@ -807,7 +807,7 @@ async function consumeLoaderResponse(
   // payload properly using the `turbo-stream` package.
   if (useSingleFetch) {
     const decodedBody = await decodeTurboStreamResponse(response)
-    const routePayload = decodedBody[route.id]
+    const routePayload = decodedBody[route.id!]
 
     if (!routePayload) {
       throw new Error(
