@@ -69,6 +69,7 @@ interface Options {
 
 interface RemixPluginContext {
   remixConfig: Required<RemixVitePluginConfig>
+  useSingleFetch: boolean
 }
 
 interface GeneratedOpenGraphImage {
@@ -180,16 +181,16 @@ export function openGraphImage(options: Options): Plugin {
     }
 
     const remixContext = await remixContextPromise
-    const usingSingleFetch =
-      !!Reflect.get(remixContext.remixConfig.future, 'unstable_singleFetch') ||
-      !!Reflect.get(remixContext.remixConfig.future, 'v3_singleFetch')
-
     const createRoutePath = compile(route.path)
 
     performance.mark(`generate-image-${route.id}-loader-start`)
 
     // Fetch all the params data from the route.
-    const loaderData = await getLoaderData(route, appUrl, usingSingleFetch)
+    const loaderData = await getLoaderData(
+      route,
+      appUrl,
+      remixContext.useSingleFetch,
+    )
 
     performance.mark(`generate-image-${route.id}-loader-end`)
     performance.measure(
@@ -407,18 +408,37 @@ export function openGraphImage(options: Options): Plugin {
 
     configResolved(config) {
       viteConfigPromise.resolve(config)
-      /**
-       * @todo Would be nice for Remix to expose this internal key.
-       */
-      const remixPluginContext = Reflect.get(config, '__remixPluginContext')
 
-      if (typeof remixPluginContext === 'undefined') {
+      const reactRouterContext = Reflect.get(
+        config,
+        '__reactRouterPluginContext',
+      )
+
+      // react-router
+      if (reactRouterContext) {
+        remixContextPromise.resolve({
+          remixConfig: reactRouterContext.reactRouterConfig,
+          useSingleFetch: true,
+        })
+        return
+      }
+
+      const remixContext = Reflect.get(config, '__remixPluginContext')
+
+      if (typeof remixContext === 'undefined') {
         throw new Error(
           `Failed to apply "remix-og-image" plugin: no Remix context found. Did you forget to use the Remix plugin in your Vite configuration?`,
         )
       }
 
-      remixContextPromise.resolve(remixPluginContext)
+      remixContextPromise.resolve({
+        remixConfig: remixContext.remixConfig,
+        useSingleFetch:
+          !!Reflect.get(
+            remixContext.remixConfig.future,
+            'unstable_singleFetch',
+          ) || !!Reflect.get(remixContext.remixConfig.future, 'v3_singleFetch'),
+      })
     },
 
     async transform(code, id, options = {}) {
@@ -494,18 +514,23 @@ export function openGraphImage(options: Options): Plugin {
       order: 'post',
       async handler() {
         const viteConfig = await viteConfigPromise
+        const isBuild = viteConfig.command === 'build'
+        const isServerBuild =
+          viteConfig.build.rollupOptions.input ===
+            'virtual:remix/server-build' ||
+          // react-router
+          viteConfig.build.rollupOptions.input ===
+            'virtual:react-router/server-build'
 
         if (
-          viteConfig.command === 'build' &&
+          isBuild &&
           /**
            * @fixme This is a hacky way of knowing the build end.
            * The problem is that `closeBundle` will trigger MULTIPLE times,
            * as there are multiple bundles Remix builds (client, server, etc).
            * This plugin has to run after the LASTMOST bundle.
            */
-          viteConfig.build.rollupOptions.input ===
-            'virtual:remix/server-build' &&
-          routesWithImages.size > 0
+          isServerBuild
         ) {
           console.log(
             `Generating OG images for ${routesWithImages.size} route(s):
