@@ -74,7 +74,7 @@ export function openGraphImage(): Array<OpenGraphImageData> {
 }
 
 // 2a. Add the `loader` export.
-export function loader({ request }}) {
+export function loader({ request }) {
   // 👉 2b. First, check if the incoming request is a meta request
   // from the plugin. Use the `isOpenGraphImageRequest` utility from the library.
   if (isOpenGraphImageRequest(request)) {
