@@ -24,7 +24,8 @@
     "test": "exit 0",
     "build": "tsup",
     "release": "release publish",
-    "prepack": "pnpm build"
+    "prepack": "pnpm build",
+    "postintall": "pnpm exec playwright install --with-deps chromium"
   },
   "keywords": [
     "og",
@@ -53,7 +54,7 @@
     "babel-dead-code-elimination": "^1.0.6",
     "es-module-lexer": "^1.5.4",
     "path-to-regexp": "^7.1.0",
-    "puppeteer": "^23.1.0",
+    "playwright": "^1.52.0",
     "sharp": "^0.33.5",
     "turbo-stream": "^2.4.0"
   },

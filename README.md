@@ -14,7 +14,7 @@ Then it occured to me: why not take my script and turn it into a Vite plugin? Yo
 
 ## Features
 
-The biggest feature of this plugin is the in-browser rendering. To put it extremely briefly: you create a route for OG images, write your React component template, and the plugin knows which routes to visit during the build, takes their screenshots using Puppeteer, and emits them on disk.
+The biggest feature of this plugin is the in-browser rendering. To put it extremely briefly: you create a route for OG images, write your React component template, and the plugin knows which routes to visit during the build, takes their screenshots using Playwright, and emits them on disk.
 
 Here's a longer version of that:
 
@@ -60,7 +60,10 @@ This library needs a designated Remix route responsible for rendering OG images.
 ```jsx
 // app/routes/og.jsx
 import { json } from '@remix-run/react'
-import { isOpenGraphImageRequest, type OpenGraphImageData } from 'remix-og-image'
+import {
+  isOpenGraphImageRequest,
+  type OpenGraphImageData,
+} from 'remix-og-image'
 
 // 👉 1. Export the special `openGraphImage` function.
 // This function returns an array of OG image generation entries.
@@ -69,7 +72,7 @@ export function openGraphImage(): Array<OpenGraphImageData> {
   return [
     // The `name` property controls the generated
     // image's file name.
-    { name: 'og-image' }
+    { name: 'og-image' },
   ]
 }
 
@@ -132,9 +135,9 @@ export function meta() {
   - `outputDirectory`, `string`, a _relative_ path to the directory to write the image. Relative to the client build assets directory (e.g. `/build/client`).
   - `format`, `"jpeg" | "png" | "webp"` (_optional_; default, `"jpeg"`), the format of the generated image.
   - `writeImage`, `Function`, (_optional_), a custom function to control writing image.
-  - `browser`, `Object`, Puppeteer browser instance options.
+  - `browser`, `Object`, Playwright browser instance options.
     - `executablePath`, `string`, (_optional_), a custom path to the Chromium executable.
-    - `mediaFeatures`, `Record<string, string>` (_optional_), custom media features to apply to each created page (see [`page.emulateMediaFeatures()`](https://pptr.dev/api/puppeteer.page.emulatemediafeatures)). Useful to force media features like `prefers-color-scheme`.
+    - `emulateMedia`, `Record<string, string>` (_optional_), custom media features to apply to each created page (see [`page.emulateMedia()`](https://playwright.dev/docs/emulation#color-scheme-and-media)). Useful to force media features like `prefers-color-scheme`.
 
 ```js
 import { openGraphImage } from 'remix-og-image/plugin'
