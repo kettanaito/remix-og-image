@@ -43,6 +43,11 @@ interface Options {
   outputDirectory: string
 
   /**
+   * Path to the debug directory to store any error-related screenshots.
+   */
+  debugDirectory?: string
+
+  /**
    * Format of the generated image.
    * @default "jpeg"
    */
@@ -252,16 +257,34 @@ export function openGraphImage(options: Options): Plugin {
             `generate-image-${route.id}-${data.name}-pageload-end`,
           )
 
-          await page
-            .locator(options.elementSelector)
-            .waitFor({ state: 'visible' })
+          const element = page.locator(options.elementSelector)
 
-          const ogImageBoundingBox = await page
-            .locator(options.elementSelector)
-            .boundingBox()
+          await element.waitFor({ state: 'visible' }).catch(async (error) => {
+            console.log(
+              'failed to generate OG image for "%s": OG image element not found',
+              data.name,
+            )
+
+            if (options.debugDirectory) {
+              const debugScreenshotBuffer = await page.screenshot({
+                type: 'png',
+              })
+              await fs.promises.writeFile(
+                path.join(options.debugDirectory, `${data.name}.png`),
+                debugScreenshotBuffer,
+              )
+            }
+
+            throw error
+          })
+
+          const ogImageBoundingBox = await element.boundingBox()
 
           if (!ogImageBoundingBox) {
-            console.log('failed to resolve OG image element for "%s"', pageUrl)
+            console.log(
+              'failed to generate OG image for "%s": cannot calculate the bounding box',
+              data.name,
+            )
             return []
           }
 
