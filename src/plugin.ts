@@ -131,6 +131,21 @@ export function openGraphImage(options: Options): Plugin {
     return fromViteBuild(options.outputDirectory, ...paths)
   }
 
+  async function writeDebugScreenshot(name: string, page: Page): Promise<void> {
+    if (!options.debugDirectory) {
+      return
+    }
+
+    const buffer = await page.screenshot({ type: 'png' })
+    const screenshotPath = path.join(options.debugDirectory, `${name}.png`)
+
+    if (!fs.existsSync(options.debugDirectory)) {
+      await fs.promises.mkdir(options.debugDirectory, { recursive: true })
+    }
+
+    await fs.promises.writeFile(screenshotPath, buffer)
+  }
+
   async function generateOpenGraphImages(
     route: RouteConfigEntry,
     browser: Browser,
@@ -265,19 +280,7 @@ export function openGraphImage(options: Options): Plugin {
               data.name,
             )
 
-            if (options.debugDirectory) {
-              const debugScreenshotBuffer = await page.screenshot({
-                type: 'png',
-              })
-              await fs.promises.writeFile(
-                path.join(
-                  options.debugDirectory,
-                  `${data.name}-element-not-visible.png`,
-                ),
-                debugScreenshotBuffer,
-              )
-            }
-
+            await writeDebugScreenshot(`${data.name}-element-not-found`, page)
             throw error
           })
 
@@ -289,19 +292,10 @@ export function openGraphImage(options: Options): Plugin {
               data.name,
             )
 
-            if (options.debugDirectory) {
-              const debugScreenshotBuffer = await page.screenshot({
-                type: 'png',
-              })
-              await fs.promises.writeFile(
-                path.join(
-                  options.debugDirectory,
-                  `${data.name}-element-no-bounding-box.png`,
-                ),
-                debugScreenshotBuffer,
-              )
-            }
-
+            await writeDebugScreenshot(
+              `${data.name}-element-no-bounding-box`,
+              page,
+            )
             return []
           }
 
