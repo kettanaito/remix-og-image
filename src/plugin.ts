@@ -252,6 +252,10 @@ export function openGraphImage(options: Options): Plugin {
             `generate-image-${route.id}-${data.name}-pageload-end`,
           )
 
+          await page
+            .locator(options.elementSelector)
+            .waitFor({ state: 'visible' })
+
           const ogImageBoundingBox = await page
             .locator(options.elementSelector)
             .boundingBox()
