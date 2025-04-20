@@ -21,7 +21,7 @@ import {
   findReferencedIdentifiers,
 } from 'babel-dead-code-elimination'
 import { compile } from 'path-to-regexp'
-import { Browser, launch } from 'puppeteer'
+import { type Browser, type Page, chromium } from 'playwright'
 import { performance } from './performance.js'
 import { parse, traverse, generate, t } from './babel.js'
 import {
@@ -63,7 +63,7 @@ interface Options {
      *   'prefers-color-scheme': 'dark',
      * }
      */
-    mediaFeatures?: Record<string, string>
+    mediaFeatures?: Parameters<Page['emulateMedia']>[0]
   }
 }
 
@@ -209,17 +209,16 @@ export function openGraphImage(options: Options): Plugin {
           `generate-image-${route.id}-${data.name}-new-page-start`,
         )
 
-        const page = await browser.newPage()
+        const page = await browser.newPage({
+          // Use a larger scale factor to get a crisp image.
+          deviceScaleFactor: 2,
+        })
 
         // Support custom user preferences (media features),
         // such as forcing a light/dark mode for the app.
         const mediaFeatures = options.browser?.mediaFeatures
         if (mediaFeatures) {
-          await page.emulateMediaFeatures(
-            Object.entries(mediaFeatures).map(([name, value]) => {
-              return { name, value }
-            }),
-          )
+          await page.emulateMedia(mediaFeatures)
         }
 
         performance.mark(`generate-image-${route.id}-${data.name}-new-page-end`)
@@ -241,11 +240,9 @@ export function openGraphImage(options: Options): Plugin {
 
             // Set viewport to a 5K device equivalent.
             // This is more than enough to ensure that the OG image is visible.
-            page.setViewport({
+            page.setViewportSize({
               width: 5120,
               height: 2880,
-              // Use a larger scale factor to get a crisp image.
-              deviceScaleFactor: 2,
             }),
           ])
 
@@ -265,7 +262,7 @@ export function openGraphImage(options: Options): Plugin {
                 return
               }
 
-              await element.scrollIntoView()
+              await element.scrollIntoViewIfNeeded()
               return element.boundingBox()
             })
 
@@ -278,14 +275,14 @@ export function openGraphImage(options: Options): Plugin {
           )
 
           const imageBuffer = await page.screenshot({
-            type: format,
-            quality: 100,
-            encoding: 'binary',
+            // Always take screenshots as png.
+            // This allows for initial transparency. The end image format
+            // will be decided by `sharp` later.
+            type: 'png',
             // Set an explicit `clip` boundary for the screenshot
             // to capture only the image and ignore any otherwise
             // present UI, like the layout.
             clip: ogImageBoundingBox,
-            optimizeForSpeed: true,
           })
 
           performance.mark(
@@ -602,7 +599,7 @@ async function getBrowserInstance(
 
   performance.mark('browser-launch-start')
 
-  browser = await launch({
+  browser = await chromium.launch({
     headless: true,
     args: [
       '--no-sandbox',
