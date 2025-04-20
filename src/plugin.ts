@@ -676,6 +676,9 @@ async function runVitePreviewServer(
       root: viteConfig.root,
       configFile: viteConfig.configFile,
       logLevel: 'error',
+      optimizeDeps: {
+        noDiscovery: true,
+      },
     },
     'serve',
     // Using `production` mode is important.
