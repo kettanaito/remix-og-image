@@ -55,6 +55,8 @@ interface Options {
 
   writeImage?: (image: { stream: Readable }) => Promise<void>
 
+  beforeScreenshot?: (args: { page: Page }) => Promise<void>
+
   browser?: {
     executablePath?: string
 
@@ -268,6 +270,10 @@ export function openGraphImage(options: Options): Plugin {
           })
 
           await page.goto(pageUrl, { waitUntil: 'domcontentloaded' })
+
+          // Support running arbitrary logic before locating the element
+          // and taking a screenshot of it.
+          options?.beforeScreenshot?.({ page })
 
           performance.mark(
             `generate-image-${route.id}-${data.name}-pageload-end`,
