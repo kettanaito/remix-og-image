@@ -138,10 +138,8 @@ export function openGraphImage(options: Options): Plugin {
 
     const buffer = await page.screenshot({ type: 'png' })
     const screenshotPath = path.join(options.debugDirectory, `${name}.png`)
-
-    if (!fs.existsSync(options.debugDirectory)) {
-      await fs.promises.mkdir(options.debugDirectory, { recursive: true })
-    }
+    const screenshotBaseDirectory = path.dirname(screenshotPath)
+    await ensureDirectory(screenshotBaseDirectory)
 
     await fs.promises.writeFile(screenshotPath, buffer)
   }
@@ -261,6 +259,14 @@ export function openGraphImage(options: Options): Plugin {
             `generate-image-${route.id}-${data.name}-pageload-start`,
           )
 
+          page.on('pageerror', (error) => {
+            console.error(
+              'Page error while rendering OG image component for "%s"',
+              data.name,
+            )
+            console.error(error)
+          })
+
           await page.goto(pageUrl, { waitUntil: 'domcontentloaded' })
 
           performance.mark(
@@ -275,28 +281,24 @@ export function openGraphImage(options: Options): Plugin {
           const element = page.locator(options.elementSelector)
 
           await element.waitFor({ state: 'visible' }).catch(async (error) => {
-            console.log(
-              'failed to generate OG image for "%s": OG image element not found',
-              data.name,
-            )
-
             await writeDebugScreenshot(`${data.name}-element-not-found`, page)
-            throw error
+            throw new Error(
+              `Failed to generate OG image for "${data.name}": OG image element not found`,
+              { cause: error },
+            )
           })
 
           const ogImageBoundingBox = await element.boundingBox()
 
           if (!ogImageBoundingBox) {
-            console.log(
-              'failed to generate OG image for "%s": cannot calculate the bounding box',
-              data.name,
-            )
-
             await writeDebugScreenshot(
               `${data.name}-element-no-bounding-box`,
               page,
             )
-            return []
+
+            throw new Error(
+              `Failed to generate OG image for "${data.name}": cannot calculate the bounding box`,
+            )
           }
 
           performance.mark(
@@ -323,7 +325,9 @@ export function openGraphImage(options: Options): Plugin {
             `generate-image-${route.id}-${data.name}-screenshot-end`,
           )
 
-          let imageStream = sharp(imageBuffer)
+          let imageStream = sharp(imageBuffer).on('error', (error) => {
+            throw new Error(`Image stream failed!`, { cause: error })
+          })
 
           switch (format) {
             case 'jpeg': {
@@ -398,24 +402,22 @@ export function openGraphImage(options: Options): Plugin {
       })
     }
 
-    const directoryName = path.dirname(image.path)
     await Promise.all([
+      ensureDirectory(path.dirname(image.path)),
       ensureDirectory(CACHE_RESULTS_DIR),
-      ensureDirectory(directoryName),
     ])
-    await ensureDirectory(directoryName)
 
     const passthrough = new PassThrough()
-    const destWriteStream = fs.createWriteStream(image.path)
+    const imageWriteStream = fs.createWriteStream(image.path)
     const cacheWriteStream = fs.createWriteStream(
       path.resolve(CACHE_RESULTS_DIR, image.name),
     )
 
-    image.stream.pipe(passthrough)
-    passthrough.pipe(destWriteStream)
+    passthrough.pipe(imageWriteStream)
     passthrough.pipe(cacheWriteStream)
+    image.stream.pipe(passthrough)
 
-    await Promise.all([finished(destWriteStream), finished(cacheWriteStream)])
+    await Promise.all([finished(imageWriteStream), finished(cacheWriteStream)])
 
     console.log(`Generated OG image at "${image.path}".`)
   }
@@ -592,25 +594,23 @@ ${Array.from(routesWithImages)
             )
           }
 
-          const results = await Promise.allSettled(pendingScreenshots)
-          await Promise.all([server.close(), browser.close(), cache.close()])
+          await Promise.all(pendingScreenshots)
+            .catch((error) => {
+              console.error(error)
+              throw new Error(
+                'Failed to generate OG images. Please see the errors above.',
+              )
+            })
+            .finally(async () => {
+              await Promise.all([
+                server.close(),
+                browser.close(),
+                cache.close(),
+              ])
 
-          let hasErrors = false
-          results.forEach((result) => {
-            if (result.status === 'rejected') {
-              hasErrors = true
-              console.error(result.reason)
-            }
-          })
-
-          if (hasErrors) {
-            throw new Error(
-              'Failed to generate OG images. Please see the errors above.',
-            )
-          }
-
-          performance.mark('plugin-end')
-          performance.measure('plugin', 'plugin-start', 'plugin-end')
+              performance.mark('plugin-end')
+              performance.measure('plugin', 'plugin-start', 'plugin-end')
+            })
         }
       },
     },
