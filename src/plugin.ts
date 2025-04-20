@@ -475,7 +475,7 @@ export function openGraphImage(options: Options): Plugin {
       })
     },
 
-    async transform(code, id, options = {}) {
+    async transform(code, id, transformOptions = {}) {
       const remixContext = await remixContextPromise
 
       if (!remixContext) {
@@ -507,7 +507,7 @@ export function openGraphImage(options: Options): Plugin {
       }
 
       // OG image generation must only happen server-side.
-      if (!options.ssr) {
+      if (!transformOptions.ssr) {
         // Parse the route module and remove the special export altogether.
         // This way, it won't be present in the client bundle, and won't affect
         // "vite-plugin-react" and its HMR.
@@ -533,7 +533,7 @@ export function openGraphImage(options: Options): Plugin {
 
       // Spawn the browser immediately once we detect an OG image route.
       if (routesWithImages.size === 0) {
-        browserPromise.resolve(getBrowserInstance())
+        browserPromise.resolve(getBrowserInstance(options.browser))
         vitePreviewPromise.resolve(
           runVitePreviewServer(await viteConfigPromise),
         )
@@ -642,7 +642,7 @@ async function getBrowserInstance(
       '--disable-gpu',
       '--disable-software-rasterizer',
     ],
-    executablePath: options.executablePath || chromium.executablePath(),
+    executablePath: options.executablePath,
   })
 
   performance.mark('browser-launch-end')
