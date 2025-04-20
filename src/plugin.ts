@@ -273,7 +273,7 @@ export function openGraphImage(options: Options): Plugin {
 
           // Support running arbitrary logic before locating the element
           // and taking a screenshot of it.
-          options?.beforeScreenshot?.({ page })
+          await options?.beforeScreenshot?.({ page })
 
           performance.mark(
             `generate-image-${route.id}-${data.name}-pageload-end`,
