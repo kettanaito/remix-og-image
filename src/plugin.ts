@@ -607,7 +607,7 @@ async function getBrowserInstance(
       '--disable-gpu',
       '--disable-software-rasterizer',
     ],
-    executablePath: options.executablePath,
+    executablePath: options.executablePath || chromium.executablePath(),
   })
 
   performance.mark('browser-launch-end')
