@@ -212,6 +212,12 @@ export function openGraphImage(options: Options): Plugin {
         const page = await browser.newPage({
           // Use a larger scale factor to get a crisp image.
           deviceScaleFactor: 2,
+          // Set viewport to a 5K device equivalent.
+          // This is more than enough to ensure that the OG image is visible.
+          viewport: {
+            width: 5120,
+            height: 2880,
+          },
         })
 
         // Support custom user preferences (media features),
@@ -235,16 +241,7 @@ export function openGraphImage(options: Options): Plugin {
             `generate-image-${route.id}-${data.name}-pageload-start`,
           )
 
-          await Promise.all([
-            page.goto(pageUrl, { waitUntil: 'domcontentloaded' }),
-
-            // Set viewport to a 5K device equivalent.
-            // This is more than enough to ensure that the OG image is visible.
-            page.setViewportSize({
-              width: 5120,
-              height: 2880,
-            }),
-          ])
+          await page.goto(pageUrl, { waitUntil: 'domcontentloaded' })
 
           performance.mark(
             `generate-image-${route.id}-${data.name}-pageload-end`,
@@ -255,15 +252,12 @@ export function openGraphImage(options: Options): Plugin {
             `generate-image-${route.id}-${data.name}-pageload-end`,
           )
 
-          const element = page.locator(options.elementSelector)
-          // Wait for the OG image element to be rendered in the DOM.
-          // This prevents a race condition between the element rendering
-          // and the plugin trying to take a screenshot of it.
-          await element.waitFor({ state: 'visible' })
-          await element.scrollIntoViewIfNeeded()
-          const ogImageBoundingBox = await element.boundingBox()
+          const ogImageBoundingBox = await page
+            .locator(options.elementSelector)
+            .boundingBox()
 
           if (!ogImageBoundingBox) {
+            console.log('failed to resolve OG image element for "%s"', pageUrl)
             return []
           }
 
