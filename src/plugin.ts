@@ -270,7 +270,10 @@ export function openGraphImage(options: Options): Plugin {
                 type: 'png',
               })
               await fs.promises.writeFile(
-                path.join(options.debugDirectory, `${data.name}.png`),
+                path.join(
+                  options.debugDirectory,
+                  `${data.name}-element-not-visible.png`,
+                ),
                 debugScreenshotBuffer,
               )
             }
@@ -285,6 +288,20 @@ export function openGraphImage(options: Options): Plugin {
               'failed to generate OG image for "%s": cannot calculate the bounding box',
               data.name,
             )
+
+            if (options.debugDirectory) {
+              const debugScreenshotBuffer = await page.screenshot({
+                type: 'png',
+              })
+              await fs.promises.writeFile(
+                path.join(
+                  options.debugDirectory,
+                  `${data.name}-element-no-bounding-box.png`,
+                ),
+                debugScreenshotBuffer,
+              )
+            }
+
             return []
           }
 
